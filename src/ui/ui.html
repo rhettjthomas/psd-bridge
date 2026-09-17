@@ -17,9 +17,7 @@
   <div class="menu" id="settings-menu" role="menu" hidden>
     <button role="menuitem" data-action="reset">Reset import options</button>
     <div class="menu-sep" role="separator"></div>
-    <button role="menuitem" data-action="export-map">Export font map…</button>
-    <button role="menuitem" data-action="copy-map">Copy font map</button>
-    <button role="menuitem" data-action="import-map">Import font map…</button>
+    <button role="menuitem" data-action="font-map">Font map (share, load, edit)…</button>
     <button role="menuitem" data-action="clear-map">Clear saved font matches</button>
     <div class="menu-sep" role="separator"></div>
     <div class="menu-note" id="menu-about"></div>
@@ -58,15 +56,12 @@
     </p>
     <div id="font-rows"></div>
     <div class="fonts-actions">
-      <button type="button" class="link" id="export-map">Export font map</button>
-      <button type="button" class="link" id="import-map">Import font map</button>
-      <input type="file" id="map-input" accept=".json,application/json" hidden />
+      <button type="button" class="link" id="open-fontmap">Share or load saved matches…</button>
     </div>
   </section>
 
   <section class="toggles" id="toggles" aria-label="Import options"></section>
 
-  <section class="notices" id="notices" hidden></section>
 
   <section class="report" id="report" hidden>
     <div class="report-head">
@@ -81,6 +76,7 @@
 </main>
 
 <footer class="footer">
+  <section class="notices" id="notices" role="status" aria-live="polite" hidden></section>
   <div class="status" id="status" hidden>
     <div class="status-label" id="status-label"></div>
     <div class="progress"><div class="progress-bar" id="progress-bar"></div></div>
@@ -88,6 +84,28 @@
   <button class="primary" id="import-btn" disabled>Import to Figma</button>
   <button class="secondary" id="cancel-btn" hidden>Cancel import</button>
 </footer>
+
+<div class="sheet" id="fontmap-sheet" role="dialog" aria-modal="true" aria-labelledby="fontmap-title" hidden>
+  <div class="sheet-head">
+    <strong id="fontmap-title">Font map</strong>
+    <button type="button" class="icon-btn" id="fontmap-close" aria-label="Close">
+      <svg width="12" height="12" viewBox="0 0 12 12" aria-hidden="true"><path d="M2 2l8 8M10 2l-8 8" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/></svg>
+    </button>
+  </div>
+  <p class="sheet-help muted">
+    Saved font matches (Photoshop font → Figma font). Copy this to a teammate or another
+    machine, then paste it there and click Save.
+  </p>
+  <textarea id="fontmap-text" spellcheck="false" placeholder='{ "Font-PostScriptName": { "family": "Inter", "style": "Bold" } }' aria-label="Font map JSON"></textarea>
+  <p class="sheet-status" id="fontmap-status" role="status" aria-live="polite"></p>
+  <div class="sheet-actions">
+    <button type="button" class="secondary" id="fontmap-copy">Copy</button>
+    <button type="button" class="secondary" id="fontmap-download">Download</button>
+    <button type="button" class="secondary" id="fontmap-load">Load file…</button>
+    <input type="file" id="fontmap-file" accept=".json,application/json,text/plain" hidden />
+  </div>
+  <button type="button" class="primary" id="fontmap-save">Save</button>
+</div>
 
 <script>/*__JS__*/</script>
 </body>

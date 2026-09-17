@@ -33,7 +33,7 @@ without notice.
 - **Adobe Fonts:** fonts activated through Creative Cloud usually don't show up in Figma. Either
   install a desktop copy of the font, or pick a replacement in the font matching window and
   check **Remember this match**, and future imports will use it automatically.
-  *Settings → Export font map* shares your matches with teammates.
+  *Settings → Font map* shares your matches with teammates.
 
 ## Shapes
 

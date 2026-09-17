@@ -34,8 +34,9 @@ or newer** ([nodejs.org](https://nodejs.org), LTS installer).
 Development plugins work with any Figma account that has these files. After pulling updates,
 run `npm run build` again and reopen the plugin; there's no need to import the manifest again.
 
-**Moving your font matches:** in the plugin, choose *Settings (gear) → Export font map* (or
-*Copy font map*), then *Import font map* on the other machine.
+**Moving your font matches:** in the plugin, choose *Settings (gear) → Font map*, then click
+**Copy** (or select the text and press ⌘C). On the other machine, open the same window, paste,
+and click **Save**. Saved matches belong to this plugin ID on each machine.
 
 ## Using it
 
@@ -65,7 +66,7 @@ run `npm run build` again and reopen the plugin; there's no need to import the m
 | "isn't a valid Photoshop document" | Re-save the file from Photoshop as `.psd` or `.psb`. |
 | "too large to load" | Close other plugins, delete unused layers, or split the file. |
 | A font keeps showing as missing | Install or activate a desktop copy of the font, then click **Rescan fonts**. For Adobe Fonts, pick a replacement and choose *Remember*. |
-| Export font map didn't download | Use *Settings → Copy font map*, paste into a text file, and save it as `.json`. |
+| Font map Copy or Download does nothing | Figma can block the clipboard and downloads. In *Settings → Font map*, the text is already selected, so press ⌘C. |
 | Colors look off | Convert the PSD to 8-bit RGB before importing. |
 | Plugin didn't pick up code changes | Run `npm run build`, then close and reopen the plugin. |
 
@@ -98,8 +99,7 @@ Real client PSDs are gitignored. Keep test files outside the repo, or anywhere i
 
 ## Before publishing to the Community
 
-- Create the plugin record in Figma desktop, put its ID in `manifest.json` → `id`, and never
-  change it after that. The current ID is a development placeholder.
+- The plugin ID (`1682467824285455363`) is set in `manifest.json`. Never change it.
 - Confirm Figma's current seller requirements, then set `LICENSING_ENABLED` in `src/licensing.ts`.
 - The plugin has no network access and collects no data. Its only outbound action is opening the
   prep guide in your browser when you click the link.

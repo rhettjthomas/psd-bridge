@@ -18,6 +18,7 @@ import { formatTree, psdToIR } from '../core/psd-reader';
 import { DEFAULT_SETTINGS, type ImportSettings } from '../core/settings';
 import { encodeMask, encodePixels } from './encode';
 import { copyText, FontsPanel } from './fonts-panel';
+import { FontMapSheet } from './fontmap-sheet';
 import { collectFontUsage } from '../core/fonts';
 
 const TOGGLES: { key: keyof ImportSettings; icon: string; label: string; help: string }[] = [
@@ -74,6 +75,13 @@ const fontsPanel = new FontsPanel({
   saveFontMap: (fontMap) => post({ type: 'save-font-map', fontMap }),
   onChange: () => updateImportButton(),
   notify: (level, text) => showNotices([{ level, text }]),
+  openFontMap: () => fontMapSheet.open(),
+});
+
+const fontMapSheet = new FontMapSheet({
+  root: $('fontmap-sheet'),
+  getMap: () => fontsPanel.currentMap(),
+  saveMap: (map) => fontsPanel.replaceMap(map),
 });
 
 function requestFonts() {
@@ -576,14 +584,8 @@ menu.addEventListener('click', (e) => {
       renderPreflight();
       showNotices([{ level: 'warning', text: 'Import options reset to defaults.' }]);
       break;
-    case 'export-map':
-      fontsPanel.exportMap();
-      break;
-    case 'copy-map':
-      void fontsPanel.copyMap();
-      break;
-    case 'import-map':
-      fontsPanel.pickMapFile();
+    case 'font-map':
+      fontMapSheet.open();
       break;
     case 'clear-map':
       fontsPanel.clearSaved();
