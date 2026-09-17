@@ -371,3 +371,39 @@ button { font: inherit; color: inherit; }
 }
 .secondary:hover { background: var(--bg-hover); }
 .status-label { display: flex; justify-content: space-between; gap: var(--space); }
+
+.footer .notices { max-height: 64px; overflow-y: auto; }
+
+.sheet {
+  position: fixed;
+  inset: 0;
+  z-index: 30;
+  display: flex;
+  flex-direction: column;
+  gap: var(--space);
+  padding: var(--space) calc(var(--space) * 2) calc(var(--space) * 2);
+  background: var(--bg);
+}
+.sheet-head { display: flex; align-items: center; justify-content: space-between; }
+.sheet-head strong { font-size: 13px; }
+.sheet-help { margin: 0; font-size: 11px; line-height: 14px; }
+.sheet textarea {
+  flex: 1;
+  min-height: 120px;
+  resize: none;
+  padding: var(--space);
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  background: var(--bg-secondary);
+  color: var(--text);
+  font: 11px/16px ui-monospace, SFMono-Regular, Menlo, monospace;
+}
+.sheet textarea:focus {
+  outline: none;
+  border-color: var(--figma-color-border-brand-strong, #0d99ff);
+  box-shadow: inset 0 0 0 1px var(--figma-color-border-brand-strong, #0d99ff);
+}
+.sheet-status { margin: 0; min-height: 28px; font-size: 11px; line-height: 14px; color: var(--text-secondary); }
+.sheet-status.error { color: var(--text-danger); }
+.sheet-actions { display: flex; gap: var(--space); }
+.sheet-actions .secondary { flex: 1; }

@@ -4,7 +4,6 @@
  */
 import {
   DEFAULT_FONT,
-  parseFontMapJson,
   parsePostScriptName,
   normalizeFontKey,
   type FamilyStyles,
@@ -37,6 +36,7 @@ export interface FontsPanelOptions {
   /** Called whenever readiness may have changed. */
   onChange: () => void;
   notify: (level: 'error' | 'warning', text: string) => void;
+  openFontMap: () => void;
 }
 
 export class FontsPanel {
@@ -51,14 +51,7 @@ export class FontsPanel {
   constructor(private readonly opts: FontsPanelOptions) {
     const { root } = opts;
     root.querySelector('#rescan-fonts')!.addEventListener('click', () => opts.rescan());
-    root.querySelector('#export-map')!.addEventListener('click', () => this.exportMap());
-    const input = root.querySelector<HTMLInputElement>('#map-input')!;
-    root.querySelector('#import-map')!.addEventListener('click', () => input.click());
-    input.addEventListener('change', async () => {
-      const file = input.files?.[0];
-      input.value = '';
-      if (file) await this.importMap(file);
-    });
+    root.querySelector('#open-fontmap')!.addEventListener('click', () => opts.openFontMap());
   }
 
   /** New file loaded: forget previous fonts and choices. */
@@ -250,39 +243,11 @@ export class FontsPanel {
     return this.resolve().fontMap;
   }
 
-  exportMap() {
-    const map = this.currentMap();
-    const count = Object.keys(map).length;
-    if (!count) {
-      this.opts.notify('warning', 'There are no saved font matches to export yet.');
-      return;
-    }
-    const blob = new Blob([JSON.stringify(map, null, 2)], { type: 'application/json' });
-    const a = document.createElement('a');
-    a.href = URL.createObjectURL(blob);
-    a.download = 'psd-bridge-font-map.json';
-    document.body.append(a);
-    a.click();
-    a.remove();
-    setTimeout(() => URL.revokeObjectURL(a.href), 1000);
-    this.opts.notify('warning', `Exported ${count} font ${count === 1 ? 'match' : 'matches'}. If no file downloaded, use "Copy font map" in settings.`);
-  }
-
-  async copyMap() {
-    const map = this.currentMap();
-    const count = Object.keys(map).length;
-    if (!count) {
-      this.opts.notify('warning', 'There are no saved font matches to copy yet.');
-      return;
-    }
-    const ok = await copyText(JSON.stringify(map, null, 2));
-    this.opts.notify(ok ? 'warning' : 'error', ok
-      ? `Copied ${count} font ${count === 1 ? 'match' : 'matches'}. Paste into a .json file to share.`
-      : "Couldn't copy to the clipboard.");
-  }
-
-  pickMapFile() {
-    this.opts.root.querySelector<HTMLInputElement>('#map-input')!.click();
+  /** Replace the saved map (from the Font map window) and re-match fonts. */
+  replaceMap(map: FontMap) {
+    this.fontMap = map;
+    this.opts.saveFontMap(map);
+    this.opts.rescan();
   }
 
   clearSaved() {
@@ -292,40 +257,36 @@ export class FontsPanel {
     this.opts.notify('warning', 'Cleared saved font matches.');
     this.opts.rescan();
   }
-
-  private async importMap(file: File) {
-    try {
-      const incoming = parseFontMapJson(await file.text());
-      const count = Object.keys(incoming).length;
-      if (!count) {
-        this.opts.notify('error', `"${file.name}" has no font matches in it.`);
-        return;
-      }
-      this.fontMap = { ...this.fontMap, ...incoming };
-      this.opts.saveFontMap(this.fontMap);
-      this.opts.notify('warning', `Imported ${count} font ${count === 1 ? 'match' : 'matches'}.`);
-      this.opts.rescan();
-    } catch {
-      this.opts.notify('error', `"${file.name}" isn't a valid font map (JSON).`);
-    }
-  }
 }
 
-/** Clipboard API first; the execCommand fallback works in iframes that block it. */
+/**
+ * Copies text. execCommand runs first and synchronously, while the click still counts as a
+ * user gesture (Figma's iframe usually blocks the async clipboard API).
+ */
 export async function copyText(text: string): Promise<boolean> {
+  const active = document.activeElement as HTMLElement | null;
+  const area = document.createElement('textarea');
+  area.value = text;
+  area.setAttribute('readonly', '');
+  area.style.position = 'fixed';
+  area.style.opacity = '0';
+  document.body.append(area);
+  area.focus();
+  area.select();
+  let ok = false;
+  try {
+    ok = document.execCommand('copy');
+  } catch {
+    ok = false;
+  }
+  area.remove();
+  active?.focus();
+  if (ok) return true;
   try {
     await navigator.clipboard.writeText(text);
     return true;
   } catch {
-    const area = document.createElement('textarea');
-    area.value = text;
-    area.style.position = 'fixed';
-    area.style.opacity = '0';
-    document.body.append(area);
-    area.select();
-    const ok = document.execCommand('copy');
-    area.remove();
-    return ok;
+    return false;
   }
 }
 

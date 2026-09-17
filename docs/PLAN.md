@@ -49,6 +49,7 @@ src/main/paints.ts       Paints and strokes applied to Figma nodes
 src/main/text.ts         Font loading and editable text nodes (with glyph-bounds alignment)
 src/ui/fonts-panel.ts    The font matching window
 src/ui/combobox.ts       Searchable, themed dropdown (font families)
+src/ui/fontmap-sheet.ts  Font map window (view, copy, paste, save)
 docs/PSD-PREP.md         Prep guide linked from the import report
 src/main/importer.ts     Builds frames, groups, and image fills (main thread)
 src/ui/encode.ts         Pixel data → PNG, with downscaling
@@ -159,7 +160,7 @@ How it's built:
   skipped.
 - **Matching window:** a family field that searches installed families, a style list, a live
   preview of the layer's text, Remember this match, Skip, Rescan fonts (re-reads Figma's font
-  list), and Export/Import font map (JSON). Guesses pre-fill abbreviated family names.
+  list), and a link to the Font map window (see M6). Guesses pre-fill abbreviated family names.
 - **Font loading:** the main thread handles messages in order and loads every chosen font once,
   in `import-begin`, before any layers arrive. Fonts that fail to load, and skipped fonts, use
   Inter Regular and are reported.
@@ -194,8 +195,12 @@ From the brief:
 
 ### M6 — Polish ✅ (built; needs a check in Figma)
 How it's built:
-- **Settings menu (gear):** reset import options; export, copy, and import the font map;
-  clear saved font matches; version.
+- **Settings menu (gear):** reset import options; a Font map window; clear saved font
+  matches; version.
+- **Font map window:** the map appears as editable JSON with Copy, Download, Load file, and
+  Save. Figma's iframe can block the clipboard and downloads, so the selected text (⌘C) and
+  paste-and-Save always work.
+- **Messages:** shown in the footer so they're always visible.
 - **Report:** a layer name that maps to a placed node is a button that selects and zooms to it,
   switching pages if needed. The report also has Copy (plain text), the import time, and a
   "PSD prep tips" link that opens `docs/PSD-PREP.md` via `figma.openExternal`. Short lists
@@ -226,16 +231,14 @@ From the brief:
 - ✅ A missing font imports after one pass through the matching window (M5 check). ⬜ Still
   to confirm with a real Adobe Fonts font.
 - ⬜ The plugin installs on a second machine in under 10 minutes (README → Install)
+- ✅ Real plugin ID set (`1682467824285455363`)
 - ⬜ Cleanup takes under 5 minutes, on a full sermon series PSD
 
-**Unverified in Figma so far:** export font map download (copy is the fallback), select-from-report
-across pages, the prep guide link (it resolves after `docs/PSD-PREP.md` is on `main`), and a
-real `.psb` file.
+**Unverified in Figma so far:** the Font map window's Copy and Download buttons (⌘C and
+paste-and-Save are the reliable path), select-from-report across pages, and a real `.psb` file.
 
 ## Before publishing
-- Create the plugin record in Figma desktop (Plugins → Development → New plugin), copy
-  its ID into `manifest.json` → `id`, and never change it after that. The current ID is a
-  development placeholder.
+- ✅ Plugin ID `1682467824285455363` is in `manifest.json`. Never change it.
 - Check Figma's current seller requirements, then switch `src/licensing.ts` from the stub
   to `figma.payments`.
 
