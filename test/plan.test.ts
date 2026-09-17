@@ -25,6 +25,12 @@ describe('planImport', () => {
       'raster:Badge (vector mask)',
       'group:Frame (masked group)',
       'raster:Card',
+      'group:Shapes',
+      'vector:Button (rounded rect)',
+      'vector:Dot (ellipse)',
+      'vector:Ribbon (path + gradient)',
+      'vector:Rule (open path)',
+      'raster:Noise (unsupported)',
       'raster:Source photo (hidden)',
     ]);
   });
@@ -81,6 +87,19 @@ describe('planImport', () => {
     const plan = planImport(tweaked, DEFAULT_SETTINGS);
     expect(plan.layers[0]).toMatchObject({ name: 'Background', parentId: null });
     expect(plan.report).toContainEqual(expect.objectContaining({ layerName: 'Background', level: 'approximated' }));
+  });
+
+  it('rasterizes shapes when "Editable vectors" is off, and reports it', () => {
+    const plan = planImport(doc, { ...DEFAULT_SETTINGS, editableVectors: false });
+    expect(plan.layers.some((l) => l.action === 'vector')).toBe(false);
+    // Live shapes without pixel bounds in the synthetic fixture are skipped as empty.
+    expect(plan.report).toContainEqual(expect.objectContaining({ layerName: 'Noise (unsupported)', level: 'approximated' }));
+  });
+
+  it('reports unsupported shape fills', () => {
+    expect(planImport(doc, DEFAULT_SETTINGS).report).toContainEqual({
+      level: 'approximated', layerName: 'Noise (unsupported)', reason: 'Shape imported as pixels: Noise gradients have no Figma equivalent.',
+    });
   });
 
   it('reports skipped shadows when "Rebuild shadows" is off', () => {

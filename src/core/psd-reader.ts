@@ -2,9 +2,11 @@
  * ag-psd `Psd` → IR. Runs in the UI iframe (ag-psd needs the browser canvas).
  * Only reads data; pixel encoding happens separately so this stays unit-testable.
  */
-import type { Color, Layer, LayerEffectShadow, LayerTextData, Psd } from 'ag-psd';
+import type { Layer, LayerEffectShadow, LayerTextData, Psd } from 'ag-psd';
 import { mapBlendMode } from './blend';
+import { toRGBA } from './color';
 import { convertPaths } from './paths';
+import { readShape } from './shapes';
 import type { Bounds, IRDocument, IRLayer, IRShadow, IRText, IRTextRun, LayerKind, ReportItem, RGBA } from './model';
 import { combineOpacity, shadowBlurAndSpread, shadowOffset, transformScale } from './units';
 
@@ -30,6 +32,8 @@ export interface ReadResult {
   /** Source ag-psd layers indexed by IR id, for decoding pixels later. */
   sources: Layer[];
 }
+
+export { toRGBA };
 
 export function psdToIR(psd: Psd, fileName: string): ReadResult {
   const layers: IRLayer[] = [];
@@ -114,8 +118,11 @@ export function psdToIR(psd: Psd, fileName: string): ReadResult {
           report.push({ level: 'approximated', layerName: name, reason: 'Warped or on-path text imported as pixels.' });
         }
         break;
-      case 'pixel':
       case 'shape':
+        layer.shape = readShape(src, psd);
+        layer.image = { width: layer.bounds.width, height: layer.bounds.height };
+        break;
+      case 'pixel':
         layer.image = { width: layer.bounds.width, height: layer.bounds.height };
         break;
     }
@@ -206,18 +213,6 @@ function toShadow(s: LayerEffectShadow, type: IRShadow['type'], globalAngle: num
     spread,
     blendMode: mapBlendMode(s.blendMode, false).mode,
   };
-}
-
-export function toRGBA(c: Color | undefined): RGBA {
-  if (!c) return { r: 0, g: 0, b: 0, a: 1 };
-  if ('fr' in c) return { r: c.fr, g: c.fg, b: c.fb, a: 1 };
-  if ('r' in c) return { r: c.r / 255, g: c.g / 255, b: c.b / 255, a: 'a' in c ? c.a : 1 };
-  if ('k' in c && !('c' in c)) {
-    const v = 1 - c.k / 255;
-    return { r: v, g: v, b: v, a: 1 };
-  }
-  // HSB / CMYK / LAB: not expected after RGB prep. Fall back to black; the doc-level report covers it.
-  return { r: 0, g: 0, b: 0, a: 1 };
 }
 
 function readText(t: LayerTextData): IRText {

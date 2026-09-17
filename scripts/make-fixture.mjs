@@ -1,6 +1,7 @@
 // Writes test/fixtures/sample.psd: a small synthetic sermon-series comp that covers
 // the mapping rules (groups, hidden, opacity, blend modes, clipping, pixel and vector
-// masks, masked groups, drop/inner shadows, text, and an adjustment layer). Real client PSDs are gitignored.
+// masks, masked groups, drop/inner shadows, live and path shapes with solid, gradient,
+// and noise fills and strokes, text, and an adjustment layer). Real client PSDs are gitignored.
 import { writePsdBuffer } from 'ag-psd';
 import { mkdir, writeFile } from 'node:fs/promises';
 
@@ -25,6 +26,39 @@ function noise(w, h) {
 
 const square = (x, y, s) =>
   [[x, y], [x + s, y], [x + s, y + s], [x, y + s]].map(([a, b]) => ({ linked: false, points: [a, b, a, b, a, b] }));
+
+const corner = (x, y) => ({ linked: false, points: [x, y, x, y, x, y] });
+const rectKnots = (x, y, w, h) => [corner(x, y), corner(x + w, y), corner(x + w, y + h), corner(x, y + h)];
+// Four-knot circle approximation (k = 0.5523).
+const ellipseKnots = (x, y, w, h) => {
+  const cx = x + w / 2, cy = y + h / 2, kx = (w / 2) * 0.5523, ky = (h / 2) * 0.5523;
+  return [
+    { linked: true, points: [cx - kx, y, cx, y, cx + kx, y] },
+    { linked: true, points: [x + w, cy - ky, x + w, cy, x + w, cy + ky] },
+    { linked: true, points: [cx + kx, y + h, cx, y + h, cx - kx, y + h] },
+    { linked: true, points: [x, cy + ky, x, cy, x, cy - ky] },
+  ];
+};
+const liveBox = (type, x, y, w, h, r = 0) => ({
+  keyOriginType: type,
+  keyOriginResolution: 72,
+  ...(type === 2 ? { keyOriginRRectRadii: { topLeft: px_(r), topRight: px_(r), bottomRight: px_(r), bottomLeft: px_(r) } } : {}),
+  keyOriginShapeBoundingBox: { top: px_(y), left: px_(x), bottom: px_(y + h), right: px_(x + w) },
+  keyOriginBoxCorners: [{ x, y }, { x: x + w, y }, { x: x + w, y: y + h }, { x, y: y + h }],
+  transform: [1, 0, 0, 1, 0, 0],
+});
+const px_ = (value) => ({ units: 'Pixels', value });
+const stroke = ({ width, align, color, dashes = [], fill = true }) => ({
+  strokeEnabled: true, fillEnabled: fill, lineWidth: px_(width), lineDashOffset: px_(0), miterLimit: 100,
+  lineCapType: 'butt', lineJoinType: 'miter', lineAlignment: align, scaleLock: false, strokeAdjust: false,
+  lineDashSet: dashes.map((d) => ({ units: 'None', value: d })), blendMode: 'normal', opacity: 1,
+  content: { type: 'color', color }, resolution: 72,
+});
+const shape = (name, knots, extra, open = false) => ({
+  name,
+  vectorMask: { paths: [{ open, fillRule: 'non-zero', operation: 'combine', knots }] },
+  ...extra,
+});
 
 const px = (name, left, top, w, h, color, extra = {}) => ({
   name, left, top, right: left + w, bottom: top + h, imageData: solid(w, h, color), ...extra,
@@ -96,6 +130,45 @@ const psd = {
           }],
         },
       })],
+    },
+    {
+      name: 'Shapes',
+      opened: true,
+      children: [
+        shape('Button (rounded rect)', rectKnots(100, 950, 200, 60), {
+          vectorFill: { type: 'color', color: { r: 198, g: 244, b: 50 } },
+          vectorOrigination: { keyDescriptorList: [liveBox(2, 100, 950, 200, 60, 12)] },
+        }),
+        shape('Dot (ellipse)', ellipseKnots(400, 950, 60, 60), {
+          vectorFill: { type: 'color', color: { r: 255, g: 255, b: 255 } },
+          vectorStroke: stroke({ width: 4, align: 'inside', color: { r: 0, g: 0, b: 0 } }),
+          vectorOrigination: { keyDescriptorList: [liveBox(5, 400, 950, 60, 60)] },
+        }),
+        shape('Ribbon (path + gradient)', [
+          ...[[600, 950], [900, 950], [860, 990], [900, 1030], [600, 1030]].map(([x, y]) => corner(x, y)),
+        ], {
+          vectorFill: {
+            type: 'solid', name: 'Custom', style: 'linear', angle: 90, scale: 1, align: true,
+            colorStops: [
+              { color: { r: 255, g: 0, b: 0 }, location: 0, midpoint: 0.5 },
+              { color: { r: 0, g: 0, b: 255 }, location: 1, midpoint: 0.5 },
+            ],
+            opacityStops: [
+              { opacity: 1, location: 0, midpoint: 0.5 },
+              { opacity: 0.5, location: 1, midpoint: 0.5 },
+            ],
+          },
+          vectorStroke: stroke({ width: 2, align: 'center', color: { r: 20, g: 20, b: 20 }, dashes: [2, 1] }),
+        }),
+        shape('Rule (open path)', [corner(950, 990), corner(1150, 990)], {
+          vectorStroke: stroke({ width: 3, align: 'outside', color: { r: 255, g: 255, b: 255 }, fill: false }),
+        }, true),
+        shape('Noise (unsupported)', rectKnots(1200, 950, 100, 60), {
+          vectorFill: { type: 'noise', name: 'Noise', style: 'linear', roughness: 0.5, colorModel: 'rgb', min: [0, 0, 0, 0], max: [1, 1, 1, 1] },
+          imageData: solid(100, 60, [128, 128, 128]),
+          left: 1200, top: 950, right: 1300, bottom: 1010,
+        }),
+      ],
     },
     px('Source photo (hidden)', 0, 0, 400, 300, [90, 90, 90], { hidden: true }),
     { name: 'Curves', adjustment: { type: 'brightness/contrast', brightness: 10, contrast: 0 } },

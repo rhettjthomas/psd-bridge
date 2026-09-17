@@ -20,6 +20,13 @@ export class MockNode {
   effects: unknown[] = [];
   clipsContent = false;
   isMask = false;
+  strokeWeight = 1;
+  strokeAlign = 'INSIDE';
+  dashPattern: number[] = [];
+  topLeftRadius = 0;
+  topRightRadius = 0;
+  bottomRightRadius = 0;
+  bottomLeftRadius = 0;
   maskType = 'ALPHA';
   private paths: { windingRule: string; data: string }[] = [];
   constructor(readonly type: string) {
@@ -81,6 +88,11 @@ export function installFigmaMock() {
       const r = new MockNode('RECTANGLE');
       page.appendChild(r);
       return r;
+    },
+    createEllipse() {
+      const e = new MockNode('ELLIPSE');
+      page.appendChild(e);
+      return e;
     },
     createVector() {
       const v = new MockNode('VECTOR');

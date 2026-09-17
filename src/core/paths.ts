@@ -95,7 +95,8 @@ function pointBounds(pts: number[]): Bounds {
     minY = Math.min(minY, pts[i + 1]);
     maxY = Math.max(maxY, pts[i + 1]);
   }
-  return { left: minX, top: minY, width: maxX - minX, height: maxY - minY };
+  const r = (n: number) => Math.round(n * 1000) / 1000;
+  return { left: r(minX), top: r(minY), width: r(maxX - minX), height: r(maxY - minY) };
 }
 
 /** Translate every coordinate in path data by (-dx, -dy). Path data here only uses M/L/C/Z. */

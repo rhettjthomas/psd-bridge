@@ -15,6 +15,8 @@ import type { ImportReport, IRShadow, ReportItem } from '../core/model';
 import type { IRVector } from '../core/paths';
 import type { PlannedLayer } from '../core/plan';
 import type { ImportSettings } from '../core/settings';
+import type { IRShape } from '../core/shapes';
+import { applyShapePaints } from './paints';
 
 type Container = BaseNode & ChildrenMixin;
 
@@ -78,22 +80,10 @@ export class Importer {
       return;
     }
 
-    const img = layer.image;
-    if (!img?.png) {
-      this.skip(layer.name, 'No pixel data found.');
-      return;
-    }
+    const content = layer.action === 'vector' ? this.shapeNode(parent, layer) : this.imageNode(parent, layer);
+    if (!content) return;
 
-    const rect = figma.createRectangle();
-    rect.name = layer.name;
-    parent.appendChild(rect);
-    rect.resize(Math.max(0.01, layer.bounds.width), Math.max(0.01, layer.bounds.height));
-    rect.x = layer.bounds.left;
-    rect.y = layer.bounds.top;
-    const image = figma.createImage(img.png);
-    rect.fills = [{ type: 'IMAGE', imageHash: image.hash, scaleMode: 'FILL' }];
-
-    let node: SceneNode & BlendMixin = rect;
+    let node: SceneNode & BlendMixin = content;
     if (layer.mask?.image?.png) {
       const mask = this.pixelMaskNode(parent, parent.children.indexOf(node), layer);
       node = wrap([mask, node], parent, layer.name);
@@ -105,10 +95,55 @@ export class Importer {
     this.applyCommon(node, layer);
     this.imported++;
     this.placed.add(layer.id);
+  }
 
+  private imageNode(parent: Container, layer: PlannedLayer): RectangleNode | null {
+    const img = layer.image;
+    if (!img?.png) {
+      this.skip(layer.name, 'No pixel data found.');
+      return null;
+    }
+    const rect = figma.createRectangle();
+    rect.name = layer.name;
+    parent.appendChild(rect);
+    rect.resize(Math.max(0.01, layer.bounds.width), Math.max(0.01, layer.bounds.height));
+    rect.x = layer.bounds.left;
+    rect.y = layer.bounds.top;
+    const image = figma.createImage(img.png);
+    rect.fills = [{ type: 'IMAGE', imageHash: image.hash, scaleMode: 'FILL' }];
     if (img.downscaled) {
       this.approximate(layer.name, `Larger than 4096 px; downscaled to ${img.width}×${img.height} and stretched to size.`);
     }
+    return rect;
+  }
+
+  /** Native rectangle/ellipse or editable vector, positioned in document space. */
+  private shapeNode(parent: Container, layer: PlannedLayer): (RectangleNode | EllipseNode | VectorNode) | null {
+    const shape = layer.shape as IRShape;
+    const g = shape.geometry;
+    let node: RectangleNode | EllipseNode | VectorNode;
+    if (g.type === 'path') {
+      node = figma.createVector();
+      parent.appendChild(node);
+      placeVectorPaths(node, g.vector);
+    } else {
+      node = g.type === 'rect' ? figma.createRectangle() : figma.createEllipse();
+      parent.appendChild(node);
+      node.resize(Math.max(0.01, g.bounds.width), Math.max(0.01, g.bounds.height));
+      node.x = g.bounds.left;
+      node.y = g.bounds.top;
+      if (g.type === 'rect' && node.type === 'RECTANGLE') {
+        [node.topLeftRadius, node.topRightRadius, node.bottomRightRadius, node.bottomLeftRadius] = g.radii;
+      }
+    }
+    node.name = layer.name;
+    try {
+      applyShapePaints(node, shape);
+    } catch (err) {
+      node.fills = [];
+      this.approximate(layer.name, `Fill couldn't be applied (${err instanceof Error ? err.message : String(err)}).`);
+    }
+    return node;
   }
 
   /** Luminance mask from the layer's mask image, inserted at `index` in `parent`. */

@@ -8,6 +8,7 @@ import {
   getLayerRealMaskImageData,
   readPsd,
   type Layer,
+  type PatternInfo,
   type ReadOptions,
 } from 'ag-psd';
 import { BATCH_BYTE_LIMIT, LAYER_BATCH_SIZE, type MainToUI, type UIToMain } from '../core/messages';
@@ -225,6 +226,7 @@ async function runImport() {
   try {
     const psd = readPsd(await file.arrayBuffer(), LAZY_PIXELS);
     const { doc, report: readReport, sources } = psdToIR(psd, file.name);
+    const patterns = new PatternCache(psd.patterns ?? []);
     const plan = planImport(doc, settings);
     const { layers: _all, ...docInfo } = doc;
     const encodeReport: ReportItem[] = [];
@@ -255,7 +257,7 @@ async function runImport() {
       const layer = plan.layers[i];
       setStatus(`Encoding layer ${i + 1} of ${plan.layers.length}`, i / plan.layers.length);
       const src = layer.action === 'clip' ? undefined : sources[layer.id];
-      const pngs = src ? await encodeLayer(src, layer, doc, encodeReport) : [];
+      const pngs = src ? await encodeLayer(src, layer, doc, patterns, encodeReport) : [];
       for (const png of pngs) {
         transfer.push(png.buffer as ArrayBuffer);
         bytes += png.byteLength;
@@ -284,12 +286,28 @@ async function encodeLayer(
   src: Layer,
   layer: PlannedLayer,
   docSize: { width: number; height: number },
+  patterns: PatternCache,
   report: ReportItem[],
 ): Promise<Uint8Array[]> {
   const out: Uint8Array[] = [];
   const fail = (what: string, err: unknown) =>
     report.push({ level: 'skipped', layerName: layer.name, reason: `Couldn't decode ${what}: ${err instanceof Error ? err.message : String(err)}` });
   try {
+    if (layer.action === 'vector') {
+      const fill = layer.shape?.fill;
+      if (fill?.type === 'pattern') {
+        const img = await patterns.get(fill.patternId);
+        if (img) {
+          layer.shape = { ...layer.shape!, fill: { ...fill, image: img } };
+          out.push(img.png);
+        } else {
+          // Without the pattern pixels, fall back to the layer's rendered pixels.
+          layer.action = 'raster';
+          report.push({ level: 'approximated', layerName: layer.name, reason: `Pattern "${fill.name}" not found in the PSD; shape imported as pixels.` });
+        }
+      }
+    }
+
     if (layer.action === 'raster') {
       try {
         const pixels = getLayerImageData(src);
@@ -305,7 +323,7 @@ async function encodeLayer(
       }
     }
 
-    if (layer.mask && (layer.action === 'group' || layer.image?.png)) {
+    if (layer.mask && (layer.action !== 'raster' || layer.image?.png)) {
       try {
         const pixels = layer.mask.source === 'realMask' ? getLayerRealMaskImageData(src) : getLayerMaskImageData(src);
         // A group has no pixel bounds of its own; its mask may need to cover the whole canvas.
@@ -326,6 +344,26 @@ async function encodeLayer(
     delete src.rawData;
   }
   return out;
+}
+
+/** Encodes each Photoshop pattern once; every use gets its own copy of the bytes to transfer. */
+class PatternCache {
+  private readonly encoded = new Map<string, Promise<{ png: Uint8Array; width: number; height: number } | null>>();
+  constructor(private readonly patterns: PatternInfo[]) {}
+
+  async get(id: string) {
+    if (!this.encoded.has(id)) {
+      const p = this.patterns.find((x) => x.id === id);
+      this.encoded.set(
+        id,
+        p
+          ? encodePixels({ width: p.bounds.w, height: p.bounds.h, data: p.data }).then((e) => ({ png: e.png, width: e.width, height: e.height }))
+          : Promise.resolve(null),
+      );
+    }
+    const img = await this.encoded.get(id)!;
+    return img && { ...img, png: img.png.slice() };
+  }
 }
 
 function onReport(report: ImportReport) {

@@ -10,6 +10,7 @@
  */
 
 import type { IRVector } from './paths';
+import type { IRShape } from './shapes';
 
 export type LayerKind =
   | 'group'
@@ -132,6 +133,8 @@ export interface IRLayer {
   vectorMask?: IRVector;
   shadows: IRShadow[];
   text?: IRText;
+  /** Shape geometry and paints (shape and fill layers). */
+  shape?: IRShape;
   /** Names of layer styles present but not translatable (bevel, glow, …). */
   unsupportedEffects: string[];
   /** Child ids in stacking order: first = bottom (same as PSD and Figma appendChild). */

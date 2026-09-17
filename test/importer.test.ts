@@ -58,12 +58,32 @@ describe('Importer', () => {
       '  GROUP Frame (masked group) @0,0 100x100',
       '    RECTANGLE Layer mask @0,0 1920x1080 mask:LUMINANCE',
       '    RECTANGLE Card @1400,400 300x200 fx:INNER_SHADOW',
+      '  GROUP Shapes @0,0 100x100',
+      '    RECTANGLE Button (rounded rect) @100,950 200x60',
+      '    ELLIPSE Dot (ellipse) @400,950 60x60',
+      '    VECTOR Ribbon (path + gradient) @600,950 300x80',
+      '    VECTOR Rule (open path) @950,990 200x0',
+      '    RECTANGLE Noise (unsupported) @1200,950 100x60',
       '  RECTANGLE Source photo (hidden) @0,0 400x300 hidden',
     ]);
     expect(frame.fills).toEqual([]);
-    // 9 image layers + 2 PSD groups; the synthetic clipping group isn't counted.
-    expect(result.imported).toBe(11);
+    // 10 image layers + 4 shapes + 3 PSD groups; the synthetic clipping group isn't counted.
+    expect(result.imported).toBe(17);
     expect(result.items).toContainEqual(expect.objectContaining({ layerName: 'Background', level: 'approximated' }));
+  });
+
+  it('builds editable shapes with radii, paints, and strokes', async () => {
+    const { frame } = await runImport();
+    const shapes = frame.children.find((c) => c.name === 'Shapes')!.children;
+    const [button, dot, ribbon] = shapes as any[];
+    expect([button.topLeftRadius, button.bottomRightRadius]).toEqual([12, 12]);
+    expect(button.fills).toEqual([{ type: 'SOLID', color: { r: expect.closeTo(0.776, 2), g: expect.closeTo(0.957, 2), b: expect.closeTo(0.196, 2) }, opacity: 1 }]);
+    expect(dot.strokes).toHaveLength(1);
+    expect([dot.strokeWeight, dot.strokeAlign]).toEqual([4, 'INSIDE']);
+    expect(ribbon.fills[0].type).toBe('GRADIENT_LINEAR');
+    expect(ribbon.fills[0].gradientStops).toHaveLength(2);
+    expect(ribbon.dashPattern).toEqual([4, 2]);
+    expect(ribbon.vectorPaths[0].windingRule).toBe('NONZERO');
   });
 
   it('converts shadow geometry into Figma effects', async () => {

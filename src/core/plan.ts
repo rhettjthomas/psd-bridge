@@ -7,7 +7,7 @@ import type { ImportSettings } from './settings';
 
 /** Features switch on as their milestones land. */
 export const FEATURES = {
-  editableVectors: false, // M4
+  editableVectors: true, // M4
   editableText: false, // M5
 };
 
@@ -15,9 +15,10 @@ export const FEATURES = {
  * group:  a PSD group.
  * clip:   a synthetic group holding a clipping base and the layers clipped to it;
  *         the importer masks it with a copy of the base.
+ * vector: a shape layer placed as an editable shape.
  * raster: a layer placed as an image.
  */
-export type LayerAction = 'group' | 'clip' | 'raster';
+export type LayerAction = 'group' | 'clip' | 'vector' | 'raster';
 
 export interface PlannedLayer extends IRLayer {
   action: LayerAction;
@@ -90,7 +91,9 @@ export function planImport(doc: IRDocument, settings: ImportSettings): ImportPla
 
   /** Layers that produce a node (a clipping base must be one of these). */
   const emittable = (l: IRLayer) =>
-    l.kind === 'group' || (l.kind !== 'adjustment' && l.bounds.width > 0 && l.bounds.height > 0);
+    l.kind === 'group' ||
+    (l.kind === 'shape' && settings.editableVectors && !!l.shape && !l.shape.unsupported) ||
+    (l.kind !== 'adjustment' && l.bounds.width > 0 && l.bounds.height > 0);
 
   const emit = (l: IRLayer, parentId: number | null, hiddenAncestor: boolean, keepGroup = false) => {
     const hidden = hiddenAncestor || !l.visible;
@@ -112,20 +115,25 @@ export function planImport(doc: IRDocument, settings: ImportSettings): ImportPla
 
     // Adjustment layers are reported by the reader.
     if (l.kind === 'adjustment') return;
+
+    if (l.kind === 'shape' && l.shape && settings.editableVectors && FEATURES.editableVectors && !l.shape.unsupported) {
+      for (const w of l.shape.warnings) report.push({ level: 'approximated', layerName: l.name, reason: w });
+      pushShadowReport(l);
+      layers.push({ ...l, action: 'vector', parentId });
+      return;
+    }
+
     // Empty layers are reported by the reader when they're pixel layers.
     if (l.bounds.width <= 0 || l.bounds.height <= 0) {
       if (l.kind !== 'pixel') report.push({ level: 'skipped', layerName: l.name, reason: 'Layer has no pixels.' });
       return;
     }
 
-    if (l.kind === 'shape' && !(settings.editableVectors && FEATURES.editableVectors)) {
-      report.push({
-        level: 'approximated',
-        layerName: l.name,
-        reason: settings.editableVectors
-          ? 'Shape imported as pixels (editable vectors arrive in Milestone 4).'
-          : 'Shape imported as pixels ("Editable vectors" is off).',
-      });
+    if (l.kind === 'shape') {
+      const reason = !settings.editableVectors
+        ? 'Shape imported as pixels ("Editable vectors" is off).'
+        : `Shape imported as pixels: ${l.shape?.unsupported ?? 'unreadable shape data.'}`;
+      report.push({ level: 'approximated', layerName: l.name, reason });
     }
     if (l.kind === 'text' && !l.text?.warped && !(settings.editableText && FEATURES.editableText)) {
       report.push({
@@ -136,10 +144,14 @@ export function planImport(doc: IRDocument, settings: ImportSettings): ImportPla
           : 'Text imported as pixels ("Editable text" is off).',
       });
     }
+    pushShadowReport(l);
+    layers.push({ ...l, action: 'raster', parentId });
+  };
+
+  const pushShadowReport = (l: IRLayer) => {
     if (l.shadows.length && !settings.rebuildShadows) {
       report.push({ level: 'skipped', layerName: l.name, reason: 'Shadows not rebuilt ("Rebuild shadows" is off).' });
     }
-    layers.push({ ...l, action: 'raster', parentId });
   };
 
   walk(doc.rootIds, null, false);

@@ -42,6 +42,10 @@ src/core/messages.ts     Typed postMessage protocol (UI ⇄ main)
 src/core/settings.ts     Toggle defaults
 src/core/plan.ts         Per-layer import action, based on the toggles; clipping groups
 src/core/paths.ts        Photoshop bezier paths → Figma vector path data
+src/core/shapes.ts       Shape layers → native rect/ellipse or path, with fill and stroke
+src/core/paint.ts        Solid/gradient/pattern paints, stop merging, gradient transform
+src/core/color.ts        ag-psd colors → RGBA
+src/main/paints.ts       Paints and strokes applied to Figma nodes
 src/main/importer.ts     Builds frames, groups, and image fills (main thread)
 src/ui/encode.ts         Pixel data → PNG, with downscaling
 src/ui/ui.html|css|ts    Plugin window; runs ag-psd with the browser canvas
@@ -86,7 +90,7 @@ Until M4 and M5 land, shapes and text import as pixels, and the report lists the
 - Smart objects are imported as a composite image and reported.
 - **Done when:** the overlay test shows no shift, and order and opacity are correct.
 
-### M3 — Structure and blending ✅ (built; needs a side-by-side check in Figma)
+### M3 — Structure and blending ✅
 How it's built:
 - **Layer mask:** the layer becomes a group of [luminance mask image, content]. When a mask's
   default color is white, the mask image is extended to cover the layer (or, for a group,
@@ -113,7 +117,27 @@ From the brief:
   adjustment layers are reported.
 - **Done when:** the result matches Photoshop side by side.
 
-### M4 — Vector shapes
+### M4 — Vector shapes ✅ (built; needs a check in Figma)
+How it's built:
+- **Native shapes:** a single, unrotated live rectangle, rounded rectangle, or ellipse
+  (`vectorOrigination`) becomes a native Figma shape. Corner radii are scaled by the shape's
+  transform; a non-uniform scale falls back to a path.
+- **Paths:** everything else becomes a vector via `placeVectorPaths`, the same function vector
+  masks use.
+- **Fill layers:** a solid, gradient, or pattern fill layer with no vector mask becomes a
+  rectangle the size of the canvas.
+- **Gradients:** Photoshop keeps color and opacity stops separately; they are merged. The
+  gradient runs through the center of the shape's box at its angle, scale, and offset
+  (`gradientTransform`). Reflected gradients become mirrored linear ones; angle and diamond map
+  to Figma's angular and diamond. Uneven midpoints are reported.
+- **Patterns:** tiled image fills at 100% (Photoshop's pattern scale isn't in the parsed data),
+  reported. A missing pattern falls back to pixels.
+- **Strokes:** width, alignment (centered on open paths), cap, join, and dashes (dash lengths
+  are multiples of the stroke width).
+- **Imported as pixels and reported:** noise gradients, pattern strokes, and shapes with no
+  drawable path.
+
+From the brief:
 - Each `vectorMask` subpath becomes a bezier `VectorPath`, with its fill rule kept.
   The transform is applied to the points once; the node is not moved again.
 - Live rectangles and ellipses (`vectorOrigination`) become native shapes with corner radii.
