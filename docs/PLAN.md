@@ -160,7 +160,7 @@ How it's built:
   skipped.
 - **Matching window:** a family field that searches installed families, a style list, a live
   preview of the layer's text, Remember this match, Skip, Rescan fonts (re-reads Figma's font
-  list), and Export/Import font map (JSON). Guesses pre-fill abbreviated family names.
+  list), and a link to the Font map window (see M6). Guesses pre-fill abbreviated family names.
 - **Font loading:** the main thread handles messages in order and loads every chosen font once,
   in `import-begin`, before any layers arrive. Fonts that fail to load, and skipped fonts, use
   Inter Regular and are reported.
