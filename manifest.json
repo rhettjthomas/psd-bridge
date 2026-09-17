@@ -1,0 +1,12 @@
+{
+  "name": "PSD Bridge",
+  "id": "psd-bridge-dev-placeholder",
+  "api": "1.0.0",
+  "main": "dist/code.js",
+  "ui": "dist/ui.html",
+  "editorType": ["figma"],
+  "documentAccess": "dynamic-page",
+  "networkAccess": {
+    "allowedDomains": ["none"]
+  }
+}

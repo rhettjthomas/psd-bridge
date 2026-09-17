@@ -1,0 +1,82 @@
+// Writes test/fixtures/sample.psd: a small synthetic sermon-series comp that covers
+// the mapping rules (groups, hidden, opacity, blend modes, clipping, masks, shadows,
+// text, and an adjustment layer). Real client PSDs are gitignored.
+import { writePsdBuffer } from 'ag-psd';
+import { mkdir, writeFile } from 'node:fs/promises';
+
+const W = 1920, H = 1080;
+
+function solid(w, h, [r, g, b], a = 255) {
+  const data = new Uint8ClampedArray(w * h * 4);
+  for (let i = 0; i < data.length; i += 4) data.set([r, g, b, a], i);
+  return { width: w, height: h, data };
+}
+
+function noise(w, h) {
+  const data = new Uint8ClampedArray(w * h * 4);
+  let s = 42;
+  for (let i = 0; i < data.length; i += 4) {
+    s = (s * 16807) % 2147483647;
+    const v = s % 256;
+    data.set([v, v, v, 255], i);
+  }
+  return { width: w, height: h, data };
+}
+
+const px = (name, left, top, w, h, color, extra = {}) => ({
+  name, left, top, right: left + w, bottom: top + h, imageData: solid(w, h, color), ...extra,
+});
+
+const psd = {
+  width: W,
+  height: H,
+  imageData: solid(W, H, [20, 20, 24]),
+  children: [
+    px('Background', 0, 0, W, H, [20, 20, 24]),
+    {
+      name: 'Texture',
+      left: 0, top: 0, right: 512, bottom: 512,
+      imageData: noise(512, 512),
+      blendMode: 'overlay',
+      opacity: 0.6,
+    },
+    {
+      name: 'Hero',
+      opened: true,
+      children: [
+        px('Photo', 200, 150, 800, 600, [180, 120, 60]),
+        px('Grade (clipped)', 200, 150, 800, 600, [40, 60, 200], { clipping: true, blendMode: 'soft light' }),
+        px('Vignette (masked)', 0, 0, 960, 540, [0, 0, 0], {
+          opacity: 0.5,
+          blendMode: 'multiply',
+          mask: { left: 100, top: 100, right: 400, bottom: 300, defaultColor: 0, imageData: solid(300, 200, [255, 255, 255]) },
+        }),
+        px('Glow (unsupported)', 1200, 700, 200, 200, [255, 220, 150], { blendMode: 'vivid light' }),
+      ],
+    },
+    {
+      name: 'Title',
+      left: 240, top: 800, right: 1200, bottom: 920,
+      text: {
+        text: 'THE WAY HOME',
+        transform: [1, 0, 0, 1, 240, 900],
+        style: { font: { name: 'Inter-Bold' }, fontSize: 96, tracking: 50, fillColor: { r: 255, g: 255, b: 255 } },
+      },
+      effects: {
+        dropShadow: [{
+          enabled: true, present: true, angle: 120, useGlobalLight: false,
+          distance: { units: 'Pixels', value: 10 }, size: { units: 'Pixels', value: 20 },
+          choke: { units: 'Pixels', value: 0 }, color: { r: 0, g: 0, b: 0 }, opacity: 0.5, blendMode: 'multiply',
+        }],
+        outerGlow: { enabled: true, present: true, size: { units: 'Pixels', value: 10 }, color: { r: 255, g: 255, b: 0 } },
+      },
+    },
+    px('Source photo (hidden)', 0, 0, 400, 300, [90, 90, 90], { hidden: true }),
+    { name: 'Curves', adjustment: { type: 'brightness/contrast', brightness: 10, contrast: 0 } },
+    { name: 'Empty layer', left: 0, top: 0, right: 0, bottom: 0 },
+  ],
+};
+
+await mkdir('test/fixtures', { recursive: true });
+await writeFile('test/fixtures/sample.psd', writePsdBuffer(psd, { invalidateTextLayers: true }));
+console.log('Wrote test/fixtures/sample.psd');

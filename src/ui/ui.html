@@ -1,0 +1,52 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<title>PSD Bridge</title>
+<style>/*__CSS__*/</style>
+</head>
+<body>
+<header class="header">
+  <div class="brand">
+    <span class="brand-name">PSD Bridge</span>
+    <span class="version" id="version"></span>
+  </div>
+  <button class="icon-btn" id="settings-btn" title="Settings" aria-label="Settings">
+    <svg width="16" height="16" viewBox="0 0 16 16" aria-hidden="true"><path fill="currentColor" d="M8 5.5a2.5 2.5 0 1 0 0 5 2.5 2.5 0 0 0 0-5Zm0 4a1.5 1.5 0 1 1 0-3 1.5 1.5 0 0 1 0 3Zm5.4-2.6-.9-.3-.2-.6.4-.8a.6.6 0 0 0-.1-.7l-.8-.8a.6.6 0 0 0-.7-.1l-.8.4-.6-.2-.3-.9A.6.6 0 0 0 8.8 2H7.2a.6.6 0 0 0-.6.4l-.3.9-.6.2-.8-.4a.6.6 0 0 0-.7.1l-.8.8a.6.6 0 0 0-.1.7l.4.8-.2.6-.9.3a.6.6 0 0 0-.4.6v1.6c0 .3.2.5.4.6l.9.3.2.6-.4.8a.6.6 0 0 0 .1.7l.8.8c.2.2.5.2.7.1l.8-.4.6.2.3.9c.1.2.3.4.6.4h1.6c.3 0 .5-.2.6-.4l.3-.9.6-.2.8.4c.2.1.5.1.7-.1l.8-.8a.6.6 0 0 0 .1-.7l-.4-.8.2-.6.9-.3c.2-.1.4-.3.4-.6V7.5a.6.6 0 0 0-.4-.6Zm-.6 1.7-1.1.4-.5 1.2.5 1-.5.5-1-.5-1.2.5-.4 1.1h-.8l-.4-1.1-1.2-.5-1 .5-.5-.5.5-1-.5-1.2-1.1-.4v-.8l1.1-.4.5-1.2-.5-1 .5-.5 1 .5 1.2-.5.4-1.1h.8l.4 1.1 1.2.5 1-.5.5.5-.5 1 .5 1.2 1.1.4v.8Z"/></svg>
+  </button>
+</header>
+
+<nav class="tabs" role="tablist">
+  <button class="tab active" role="tab" aria-selected="true">Import</button>
+  <button class="tab" role="tab" aria-selected="false" disabled title="Coming in v2">Export</button>
+</nav>
+
+<main class="content">
+  <label class="dropzone" id="dropzone">
+    <input type="file" id="file-input" accept=".psd,image/vnd.adobe.photoshop" hidden />
+    <div class="dropzone-empty" id="dropzone-empty">
+      <strong>Choose PSD</strong>
+      <span class="muted">or drop a .psd file here</span>
+    </div>
+    <div class="dropzone-file" id="dropzone-file" hidden>
+      <strong class="file-name" id="file-name"></strong>
+      <span class="muted" id="file-meta"></span>
+    </div>
+  </label>
+
+  <section class="toggles" id="toggles" aria-label="Import options"></section>
+
+  <section class="notices" id="notices" hidden></section>
+</main>
+
+<footer class="footer">
+  <div class="status" id="status" hidden>
+    <div class="status-label" id="status-label"></div>
+    <div class="progress"><div class="progress-bar" id="progress-bar"></div></div>
+  </div>
+  <button class="primary" id="import-btn" disabled>Import to Figma</button>
+</footer>
+
+<script>/*__JS__*/</script>
+</body>
+</html>

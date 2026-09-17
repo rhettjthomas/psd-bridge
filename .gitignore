@@ -1,0 +1,7 @@
+node_modules/
+dist/
+.DS_Store
+*.log
+# Real client PSDs stay local; only the generated fixture is committed.
+*.psd
+!test/fixtures/sample.psd
