@@ -9,6 +9,8 @@
  * arrays, numbers, strings, and Uint8Array only.
  */
 
+import type { IRVector } from './paths';
+
 export type LayerKind =
   | 'group'
   | 'pixel'
@@ -73,9 +75,13 @@ export interface IRShadow {
 }
 
 export interface IRLayerMask {
+  /** Mask pixel bounds; after encoding, the bounds the mask image covers. */
   bounds: Bounds;
+  /** Gray level (0–255) outside the mask bounds. 0 hides, 255 shows. */
+  defaultColor: number;
+  /** Which ag-psd mask holds the user's pixel mask (realMask when a vector mask also exists). */
+  source: 'mask' | 'realMask';
   image?: IRImage;
-  disabled?: boolean;
 }
 
 export interface IRTextRun {
@@ -122,7 +128,8 @@ export interface IRLayer {
   clipped: boolean;
   image?: IRImage;
   mask?: IRLayerMask;
-  hasVectorMask: boolean;
+  /** Vector mask geometry (non-shape layers). */
+  vectorMask?: IRVector;
   shadows: IRShadow[];
   text?: IRText;
   /** Names of layer styles present but not translatable (bevel, glow, …). */

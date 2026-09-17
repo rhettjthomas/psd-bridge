@@ -4,6 +4,7 @@
  */
 import type { Color, Layer, LayerEffectShadow, LayerTextData, Psd } from 'ag-psd';
 import { mapBlendMode } from './blend';
+import { convertPaths } from './paths';
 import type { Bounds, IRDocument, IRLayer, IRShadow, IRText, IRTextRun, LayerKind, ReportItem, RGBA } from './model';
 import { combineOpacity, shadowBlurAndSpread, shadowOffset, transformScale } from './units';
 
@@ -71,20 +72,13 @@ export function psdToIR(psd: Psd, fileName: string): ReadResult {
       blendMode: blend.mode,
       sourceBlendMode: blend.fallback ? src.blendMode : undefined,
       clipped: !!src.clipping,
-      hasVectorMask: !!src.vectorMask && kind !== 'shape',
       shadows: [],
       unsupportedEffects: [],
     };
     layers.push(layer);
     sources.push(src);
 
-    if (src.mask && !src.mask.fromVectorData) {
-      const m = src.mask;
-      layer.mask = {
-        bounds: edgesToBounds(m.left, m.top, m.right, m.bottom),
-        disabled: m.disabled,
-      };
-    }
+    readMasks(src, layer, psd, report);
 
     const fx = src.effects;
     if (fx && !fx.disabled) {
@@ -139,6 +133,45 @@ export function psdToIR(psd: Psd, fileName: string): ReadResult {
     report,
     sources,
   };
+}
+
+function readMasks(src: Layer, layer: IRLayer, psd: Psd, report: ReportItem[]) {
+  // With both mask types, ag-psd puts the vector-derived raster in `mask` and the user's pixel mask in `realMask`.
+  const fromVector = !!src.mask?.fromVectorData;
+  const pixelMask = fromVector ? src.realMask : src.mask;
+  const source = fromVector ? 'realMask' : 'mask';
+  if (pixelMask) {
+    const bounds = edgesToBounds(pixelMask.left, pixelMask.top, pixelMask.right, pixelMask.bottom);
+    if (pixelMask.disabled) {
+      report.push({ level: 'skipped', layerName: layer.name, reason: 'Disabled layer mask was not imported.' });
+    } else if ((bounds.width > 0 && bounds.height > 0) || pixelMask.defaultColor) {
+      layer.mask = { bounds, defaultColor: pixelMask.defaultColor ?? 0, source };
+      if (pixelMask.userMaskFeather) {
+        report.push({ level: 'approximated', layerName: layer.name, reason: 'Layer mask feather was not applied.' });
+      }
+      if (pixelMask.userMaskDensity !== undefined && pixelMask.userMaskDensity < 1) {
+        report.push({ level: 'approximated', layerName: layer.name, reason: 'Layer mask density was imported at 100%.' });
+      }
+    } else {
+      // An empty mask with a black default hides the whole layer.
+      layer.visible = false;
+      report.push({ level: 'approximated', layerName: layer.name, reason: 'Layer mask hides everything; imported hidden.' });
+    }
+  }
+
+  const vm = src.vectorMask;
+  if (vm && layer.kind !== 'shape') {
+    if (vm.disable) {
+      report.push({ level: 'skipped', layerName: layer.name, reason: 'Disabled vector mask was not imported.' });
+      return;
+    }
+    const invertFrom = vm.fillStartsWithAllPixels ? { left: 0, top: 0, width: psd.width, height: psd.height } : undefined;
+    const vec = convertPaths(vm.paths ?? [], { invertFrom });
+    if (vec) {
+      layer.vectorMask = vec;
+      if (vec.warning) report.push({ level: 'approximated', layerName: layer.name, reason: `Vector mask: ${vec.warning}` });
+    }
+  }
 }
 
 export function layerKind(l: Layer): LayerKind {
@@ -238,7 +271,7 @@ export function formatTree(doc: IRDocument): string {
         l.blendMode !== 'NORMAL' && l.blendMode !== 'PASS_THROUGH' ? l.blendMode.toLowerCase() : '',
         l.clipped ? 'clipped' : '',
         l.mask ? 'mask' : '',
-        l.hasVectorMask ? 'vmask' : '',
+        l.vectorMask ? 'vmask' : '',
         l.shadows.length ? `${l.shadows.length} shadow` : '',
       ].filter(Boolean);
       const b = l.bounds;

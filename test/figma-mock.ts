@@ -1,3 +1,5 @@
+import { translatePathData } from '../src/core/paths';
+
 /** Minimal in-memory stand-in for the Figma plugin API, enough for the importer. */
 type AnyNode = MockNode;
 
@@ -14,7 +16,12 @@ export class MockNode {
   opacity = 1;
   blendMode: string;
   fills: unknown[] = [];
+  strokes: unknown[] = [];
+  effects: unknown[] = [];
   clipsContent = false;
+  isMask = false;
+  maskType = 'ALPHA';
+  private paths: { windingRule: string; data: string }[] = [];
   constructor(readonly type: string) {
     this.blendMode = type === 'GROUP' ? 'PASS_THROUGH' : 'NORMAL';
   }
@@ -29,6 +36,27 @@ export class MockNode {
   resize(w: number, h: number) {
     this.width = w;
     this.height = h;
+  }
+  /** Like Figma, re-origins path data so its top-left point is (0,0). */
+  set vectorPaths(v: { windingRule: string; data: string }[]) {
+    const nums = v.flatMap((p) => p.data.split(' ').filter((t) => !/^[A-Z]$/.test(t)).map(Number));
+    const xs = nums.filter((_, i) => i % 2 === 0);
+    const ys = nums.filter((_, i) => i % 2 === 1);
+    const dx = Math.min(...xs);
+    const dy = Math.min(...ys);
+    this.paths = v.map((p) => ({ ...p, data: translatePathData(p.data, dx, dy) }));
+    this.width = Math.max(...xs) - dx;
+    this.height = Math.max(...ys) - dy;
+  }
+  get vectorPaths() {
+    return this.paths;
+  }
+  clone(): MockNode {
+    const c = new MockNode(this.type);
+    Object.assign(c, { ...this, children: [], parent: null });
+    for (const ch of this.children) c.appendChild(ch.clone());
+    this.parent?.insertChild(this.parent.children.indexOf(this) + 1, c);
+    return c;
   }
   remove() {
     if (this.parent) this.parent.children.splice(this.parent.children.indexOf(this), 1);
@@ -54,6 +82,11 @@ export function installFigmaMock() {
       page.appendChild(r);
       return r;
     },
+    createVector() {
+      const v = new MockNode('VECTOR');
+      page.appendChild(v);
+      return v;
+    },
     createImage(bytes: Uint8Array) {
       if (!(bytes instanceof Uint8Array)) throw new Error('bad bytes');
       return { hash: `h${hash++}` };
@@ -71,7 +104,13 @@ export function installFigmaMock() {
 }
 
 export function tree(n: MockNode, depth = 0): string[] {
-  const flags = [n.visible ? '' : 'hidden', n.opacity < 1 ? n.opacity.toFixed(2) : '', n.blendMode !== 'NORMAL' && n.blendMode !== 'PASS_THROUGH' ? n.blendMode : '']
+  const flags = [
+    n.visible ? '' : 'hidden',
+    n.opacity < 1 ? n.opacity.toFixed(2) : '',
+    n.blendMode !== 'NORMAL' && n.blendMode !== 'PASS_THROUGH' ? n.blendMode : '',
+    n.isMask ? `mask:${n.maskType}` : '',
+    n.effects.length ? `fx:${(n.effects as { type: string }[]).map((e) => e.type).join(',')}` : '',
+  ]
     .filter(Boolean).join(' ');
   const self = `${'  '.repeat(depth)}${n.type} ${n.name} @${n.x},${n.y} ${n.width}x${n.height}${flags ? ' ' + flags : ''}`;
   return [self, ...n.children.map((c) => tree(c, depth + 1)).flat()];

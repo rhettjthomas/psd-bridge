@@ -2,13 +2,20 @@
  * UI iframe. Owns the file picker, toggles, and PSD parsing and pixel encoding
  * (ag-psd uses the browser canvas here; the main thread has none).
  */
-import { getLayerImageData, readPsd, type Layer, type ReadOptions } from 'ag-psd';
+import {
+  getLayerImageData,
+  getLayerMaskImageData,
+  getLayerRealMaskImageData,
+  readPsd,
+  type Layer,
+  type ReadOptions,
+} from 'ag-psd';
 import { BATCH_BYTE_LIMIT, LAYER_BATCH_SIZE, type MainToUI, type UIToMain } from '../core/messages';
 import type { ImportReport, IRDocument, ReportItem } from '../core/model';
 import { planImport, type PlannedLayer } from '../core/plan';
 import { formatTree, psdToIR } from '../core/psd-reader';
 import { DEFAULT_SETTINGS, type ImportSettings } from '../core/settings';
-import { encodePixels } from './encode';
+import { encodeMask, encodePixels } from './encode';
 
 const TOGGLES: { key: keyof ImportSettings; icon: string; label: string; help: string }[] = [
   { key: 'editableText', icon: 'T', label: 'Editable text', help: 'Converts text layers to Figma text' },
@@ -246,13 +253,12 @@ async function runImport() {
 
     for (let i = 0; i < plan.layers.length; i++) {
       const layer = plan.layers[i];
-      if (layer.action === 'raster') {
-        setStatus(`Encoding layer ${i + 1} of ${plan.layers.length}`, i / plan.layers.length);
-        const png = await rasterize(sources[layer.id], layer, encodeReport);
-        if (png) {
-          transfer.push(png.buffer as ArrayBuffer);
-          bytes += png.byteLength;
-        }
+      setStatus(`Encoding layer ${i + 1} of ${plan.layers.length}`, i / plan.layers.length);
+      const src = layer.action === 'clip' ? undefined : sources[layer.id];
+      const pngs = src ? await encodeLayer(src, layer, doc, encodeReport) : [];
+      for (const png of pngs) {
+        transfer.push(png.buffer as ArrayBuffer);
+        bytes += png.byteLength;
       }
       batch.push(layer);
       if (batch.length >= LAYER_BATCH_SIZE || bytes >= BATCH_BYTE_LIMIT) await flush();
@@ -270,23 +276,56 @@ async function runImport() {
   }
 }
 
-/** Decodes one layer, encodes it to PNG, attaches it to the planned layer, and frees the source. */
-async function rasterize(src: Layer, layer: PlannedLayer, report: ReportItem[]): Promise<Uint8Array | null> {
+/**
+ * Decodes one layer's pixels and mask, encodes them to PNG, attaches them to the
+ * planned layer, and frees the source's raw data. Returns the PNGs to transfer.
+ */
+async function encodeLayer(
+  src: Layer,
+  layer: PlannedLayer,
+  docSize: { width: number; height: number },
+  report: ReportItem[],
+): Promise<Uint8Array[]> {
+  const out: Uint8Array[] = [];
+  const fail = (what: string, err: unknown) =>
+    report.push({ level: 'skipped', layerName: layer.name, reason: `Couldn't decode ${what}: ${err instanceof Error ? err.message : String(err)}` });
   try {
-    const pixels = getLayerImageData(src);
-    if (!pixels) {
-      report.push({ level: 'skipped', layerName: layer.name, reason: 'No pixel data in the PSD.' });
-      return null;
+    if (layer.action === 'raster') {
+      try {
+        const pixels = getLayerImageData(src);
+        if (pixels) {
+          const enc = await encodePixels(pixels);
+          layer.image = { width: enc.width, height: enc.height, png: enc.png, downscaled: enc.downscaled };
+          out.push(enc.png);
+        } else {
+          report.push({ level: 'skipped', layerName: layer.name, reason: 'No pixel data in the PSD.' });
+        }
+      } catch (err) {
+        fail('pixels', err);
+      }
     }
-    const enc = await encodePixels(pixels);
-    layer.image = { width: enc.width, height: enc.height, png: enc.png, downscaled: enc.downscaled };
-    return enc.png;
-  } catch (err) {
-    report.push({ level: 'skipped', layerName: layer.name, reason: `Couldn't decode pixels: ${err instanceof Error ? err.message : String(err)}` });
-    return null;
+
+    if (layer.mask && (layer.action === 'group' || layer.image?.png)) {
+      try {
+        const pixels = layer.mask.source === 'realMask' ? getLayerRealMaskImageData(src) : getLayerMaskImageData(src);
+        // A group has no pixel bounds of its own; its mask may need to cover the whole canvas.
+        const cover = layer.action === 'group' ? { left: 0, top: 0, width: docSize.width, height: docSize.height } : layer.bounds;
+        const enc = await encodeMask(pixels, layer.mask.bounds, cover, layer.mask.defaultColor);
+        layer.mask = {
+          ...layer.mask,
+          bounds: enc.bounds,
+          image: { width: enc.width, height: enc.height, png: enc.png, downscaled: enc.downscaled },
+        };
+        out.push(enc.png);
+      } catch (err) {
+        fail('layer mask', err);
+        layer.mask = undefined;
+      }
+    }
   } finally {
     delete src.rawData;
   }
+  return out;
 }
 
 function onReport(report: ImportReport) {

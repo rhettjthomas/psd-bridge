@@ -32,8 +32,20 @@ describe('psdToIR (fixture)', () => {
     expect(byName('Texture')).toMatchObject({ blendMode: 'OVERLAY' });
     expect(byName('Texture').opacity).toBeCloseTo(0.6, 2);
     expect(byName('Grade (clipped)')).toMatchObject({ clipped: true, blendMode: 'SOFT_LIGHT' });
-    expect(byName('Vignette (masked)').mask?.bounds).toEqual({ left: 100, top: 100, width: 300, height: 200 });
+    expect(byName('Vignette (masked)').mask).toEqual({
+      bounds: { left: 100, top: 100, width: 300, height: 200 }, defaultColor: 0, source: 'mask',
+    });
+    expect(byName('Frame (masked group)').mask).toMatchObject({ defaultColor: 255 });
     expect(byName('Glow (unsupported)')).toMatchObject({ blendMode: 'NORMAL', sourceBlendMode: 'vivid light' });
+  });
+
+  it('reads vector masks as even-odd paths with holes', () => {
+    const vm = byName('Badge (vector mask)').vectorMask!;
+    expect(vm.paths).toHaveLength(1);
+    expect(vm.paths[0].windingRule).toBe('EVENODD');
+    expect(vm.paths[0].data.match(/M /g)).toHaveLength(2);
+    expect(vm.bounds.left).toBeCloseTo(1500);
+    expect(vm.bounds.width).toBeCloseTo(300);
   });
 
   it('reads text and shadows', () => {

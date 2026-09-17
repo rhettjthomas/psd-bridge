@@ -1,6 +1,6 @@
 // Writes test/fixtures/sample.psd: a small synthetic sermon-series comp that covers
-// the mapping rules (groups, hidden, opacity, blend modes, clipping, masks, shadows,
-// text, and an adjustment layer). Real client PSDs are gitignored.
+// the mapping rules (groups, hidden, opacity, blend modes, clipping, pixel and vector
+// masks, masked groups, drop/inner shadows, text, and an adjustment layer). Real client PSDs are gitignored.
 import { writePsdBuffer } from 'ag-psd';
 import { mkdir, writeFile } from 'node:fs/promises';
 
@@ -22,6 +22,9 @@ function noise(w, h) {
   }
   return { width: w, height: h, data };
 }
+
+const square = (x, y, s) =>
+  [[x, y], [x + s, y], [x + s, y + s], [x, y + s]].map(([a, b]) => ({ linked: false, points: [a, b, a, b, a, b] }));
 
 const px = (name, left, top, w, h, color, extra = {}) => ({
   name, left, top, right: left + w, bottom: top + h, imageData: solid(w, h, color), ...extra,
@@ -70,6 +73,29 @@ const psd = {
         }],
         outerGlow: { enabled: true, present: true, size: { units: 'Pixels', value: 10 }, color: { r: 255, g: 255, b: 0 } },
       },
+    },
+    px('Badge (vector mask)', 1500, 100, 300, 300, [240, 200, 40], {
+      vectorMask: {
+        paths: [
+          { open: false, fillRule: 'non-zero', operation: 'combine', knots: square(1500, 100, 300) },
+          { open: false, fillRule: 'non-zero', operation: 'subtract', knots: square(1600, 200, 100) },
+        ],
+      },
+    }),
+    {
+      name: 'Frame (masked group)',
+      opened: true,
+      // White outside the mask: the group shows everywhere except the black square.
+      mask: { left: 1450, top: 450, right: 1550, bottom: 550, defaultColor: 255, imageData: solid(100, 100, [0, 0, 0]) },
+      children: [px('Card', 1400, 400, 300, 200, [230, 230, 230], {
+        effects: {
+          innerShadow: [{
+            enabled: true, present: true, angle: 90, useGlobalLight: false,
+            distance: { units: 'Pixels', value: 4 }, size: { units: 'Pixels', value: 8 },
+            choke: { units: 'Pixels', value: 50 }, color: { r: 0, g: 0, b: 0 }, opacity: 0.25, blendMode: 'multiply',
+          }],
+        },
+      })],
     },
     px('Source photo (hidden)', 0, 0, 400, 300, [90, 90, 90], { hidden: true }),
     { name: 'Curves', adjustment: { type: 'brightness/contrast', brightness: 10, contrast: 0 } },

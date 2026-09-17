@@ -40,7 +40,8 @@ src/core/units.ts        Shadow offsets, tracking, opacity, downscale math
 src/core/fonts.ts        PostScript name parsing + font matching
 src/core/messages.ts     Typed postMessage protocol (UI ⇄ main)
 src/core/settings.ts     Toggle defaults
-src/core/plan.ts         Per-layer import action, based on the toggles
+src/core/plan.ts         Per-layer import action, based on the toggles; clipping groups
+src/core/paths.ts        Photoshop bezier paths → Figma vector path data
 src/main/importer.ts     Builds frames, groups, and image fills (main thread)
 src/ui/encode.ts         Pixel data → PNG, with downscaling
 src/ui/ui.html|css|ts    Plugin window; runs ag-psd with the browser canvas
@@ -71,7 +72,7 @@ test/                    Vitest specs (core, planner, importer via a Figma API m
 - Core unit tests pass. `npm run inspect <file.psd>` prints the tree.
 - **Done when:** the Figma desktop plugin runs and logs the tree of a real sermon PSD.
 
-### M2 — Pixel layers ✅ (built; needs a check in Figma with a real PSD)
+### M2 — Pixel layers ✅
 Built: re-reads the PSD with `useRawData` and decodes one layer at a time. Encodes PNGs in
 the UI and sends batches of 20 layers or 48 MB, whichever comes first, waiting for the main
 thread to confirm each batch. Groups start as placeholder frames and become real Figma groups at
@@ -85,7 +86,23 @@ Until M4 and M5 land, shapes and text import as pixels, and the report lists the
 - Smart objects are imported as a composite image and reported.
 - **Done when:** the overlay test shows no shift, and order and opacity are correct.
 
-### M3 — Structure and blending
+### M3 — Structure and blending ✅ (built; needs a side-by-side check in Figma)
+How it's built:
+- **Layer mask:** the layer becomes a group of [luminance mask image, content]. When a mask's
+  default color is white, the mask image is extended to cover the layer (or, for a group,
+  the whole canvas).
+- **Vector mask:** an editable vector with `isMask` and `maskType: VECTOR`. Subtracted
+  subpaths merge with even-odd winding; intersections are reported. The vector's position is
+  checked by reading its path data back from Figma.
+- **Masked groups:** stay Figma groups, with the mask as the bottom child (instead of the
+  frame the brief suggests); they are kept even when flattening.
+- **Clipping mask:** a "(clipping group)" containing an alpha-mask copy of the base, the base,
+  and the clipped layers. The group takes the base's visibility, opacity, and blend mode.
+  Groups used as a base are kept when flattening.
+- **Shadows:** set as effects on the outermost node for the layer.
+- **Reported:** mask feather and density, disabled masks, and clipped layers with no base.
+
+From the brief:
 - Groups keep their names, order, visibility, and opacity. A group with a mask becomes a frame.
 - The "Flatten groups" toggle works.
 - Blend map: pass-through groups; unmapped modes fall back to Normal and are reported.

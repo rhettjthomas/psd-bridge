@@ -17,10 +17,14 @@ describe('planImport', () => {
       'raster:Background',
       'raster:Texture',
       'group:Hero',
+      'clip:Photo (clipping group)',
       'raster:Photo',
       'raster:Grade (clipped)',
       'raster:Vignette (masked)',
       'raster:Glow (unsupported)',
+      'raster:Badge (vector mask)',
+      'group:Frame (masked group)',
+      'raster:Card',
       'raster:Source photo (hidden)',
     ]);
   });
@@ -35,15 +39,52 @@ describe('planImport', () => {
     expect(names({ ...DEFAULT_SETTINGS, importHidden: false })).not.toContain('raster:Source photo (hidden)');
   });
 
-  it('reparents children to the frame when flattening groups', () => {
+  it('reparents children of plain groups to the frame when flattening', () => {
     const plan = planImport(doc, { ...DEFAULT_SETTINGS, flattenGroups: true });
-    expect(plan.layers.some((l) => l.action === 'group')).toBe(false);
-    expect(plan.layers.find((l) => l.name === 'Photo')!.parentId).toBeNull();
+    const byName = (n: string) => plan.layers.find((l) => l.name === n)!;
+    expect(plan.layers.some((l) => l.name === 'Hero')).toBe(false);
+    expect(byName('Vignette (masked)').parentId).toBeNull();
+    expect(byName('Photo (clipping group)').parentId).toBeNull();
+    // Masked groups survive flattening.
+    expect(byName('Card').parentId).toBe(byName('Frame (masked group)').id);
   });
 
-  it('keeps children under their group otherwise', () => {
+  it('wraps a clipping base and its clipped layers in a clip group', () => {
     const plan = planImport(doc, DEFAULT_SETTINGS);
-    const hero = plan.layers.find((l) => l.name === 'Hero')!;
-    expect(plan.layers.find((l) => l.name === 'Photo')!.parentId).toBe(hero.id);
+    const byName = (n: string) => plan.layers.find((l) => l.name === n)!;
+    const hero = byName('Hero');
+    const clip = byName('Photo (clipping group)');
+    expect(clip).toMatchObject({ action: 'clip', parentId: hero.id, children: [byName('Photo').id] });
+    expect(byName('Photo').parentId).toBe(clip.id);
+    expect(byName('Grade (clipped)').parentId).toBe(clip.id);
+    expect(byName('Vignette (masked)').parentId).toBe(hero.id);
+  });
+
+  it('moves base visibility, opacity, and blend onto the clip group', () => {
+    const base = doc.layers.find((l) => l.name === 'Photo')!;
+    const tweaked = {
+      ...doc,
+      layers: doc.layers.map((l) => (l === base ? { ...l, visible: false, opacity: 0.5, blendMode: 'SCREEN' as const } : l)),
+    };
+    const plan = planImport(tweaked, DEFAULT_SETTINGS);
+    expect(plan.layers.find((l) => l.action === 'clip')).toMatchObject({ visible: false, opacity: 0.5, blendMode: 'SCREEN' });
+    expect(plan.layers.find((l) => l.name === 'Photo')).toMatchObject({ visible: true, opacity: 1, blendMode: 'NORMAL' });
+    // With hidden layers off, the base and everything clipped to it are dropped.
+    const noHidden = planImport(tweaked, { ...DEFAULT_SETTINGS, importHidden: false }).layers.map((l) => l.name);
+    expect(noHidden).not.toContain('Grade (clipped)');
+    expect(noHidden).not.toContain('Photo');
+  });
+
+  it('imports a clipped layer with no base unclipped and reports it', () => {
+    const first = doc.layers.find((l) => l.name === 'Background')!;
+    const tweaked = { ...doc, layers: doc.layers.map((l) => (l === first ? { ...l, clipped: true } : l)) };
+    const plan = planImport(tweaked, DEFAULT_SETTINGS);
+    expect(plan.layers[0]).toMatchObject({ name: 'Background', parentId: null });
+    expect(plan.report).toContainEqual(expect.objectContaining({ layerName: 'Background', level: 'approximated' }));
+  });
+
+  it('reports skipped shadows when "Rebuild shadows" is off', () => {
+    const plan = planImport(doc, { ...DEFAULT_SETTINGS, rebuildShadows: false });
+    expect(plan.report).toContainEqual(expect.objectContaining({ layerName: 'Card', level: 'skipped' }));
   });
 });
