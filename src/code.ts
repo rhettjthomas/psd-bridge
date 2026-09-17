@@ -7,10 +7,13 @@ import { formatTree } from './core/psd-reader';
 import { FONT_MAP_KEY, normalizeSettings, SETTINGS_KEY } from './core/settings';
 import type { FontMap } from './core/fonts';
 import { isLicensed } from './licensing';
+import { Importer } from './main/importer';
 
 declare const __VERSION__: string;
 
 figma.showUI(__html__, { width: 340, height: 480, themeColors: true, title: 'PSD Bridge' });
+
+let importer: Importer | null = null;
 
 function post(msg: MainToUI) {
   figma.ui.postMessage(msg);
@@ -46,17 +49,37 @@ figma.ui.onmessage = async (msg: UIToMain) => {
         console.log(`[PSD Bridge] Parsed layer tree\n${formatTree(msg.doc)}`);
         break;
       case 'import-begin':
-      case 'layers-batch':
-      case 'import-end':
-        // Node building lands in M2.
-        post({ type: 'error', message: 'Import is not built yet (Milestone 2). The layer tree was logged to the console.' });
+        importer?.abort();
+        importer = new Importer(msg.doc, msg.settings, msg.totalLayers, msg.preflight);
+        post({ type: 'progress', done: 0, total: msg.totalLayers, label: `Placing layers…` });
         break;
-      case 'cancel':
-        figma.closePlugin();
+      case 'layers-batch': {
+        if (!importer) throw new Error('Import was not started.');
+        importer.addBatch(msg.layers);
+        const { done, total } = importer;
+        post({ type: 'progress', done, total, label: `Placing layer ${done} of ${total}` });
+        post({ type: 'batch-ack' });
+        break;
+      }
+      case 'import-end': {
+        if (!importer) throw new Error('Import was not started.');
+        const report = importer.finish(msg.report);
+        importer = null;
+        post({ type: 'report', report });
+        figma.notify(`PSD Bridge: imported ${report.imported} layers`);
+        break;
+      }
+      case 'import-abort':
+        importer?.abort();
+        importer = null;
         break;
     }
   } catch (err) {
     console.error('[PSD Bridge]', err);
+    if (msg.type.startsWith('import') || msg.type === 'layers-batch') {
+      importer?.abort();
+      importer = null;
+    }
     post({ type: 'error', message: err instanceof Error ? err.message : String(err) });
   }
 };

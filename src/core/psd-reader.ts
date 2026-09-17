@@ -26,11 +26,14 @@ const UNSUPPORTED_EFFECTS = [
 export interface ReadResult {
   doc: IRDocument;
   report: ReportItem[];
+  /** Source ag-psd layers indexed by IR id, for decoding pixels later. */
+  sources: Layer[];
 }
 
 export function psdToIR(psd: Psd, fileName: string): ReadResult {
   const layers: IRLayer[] = [];
   const report: ReportItem[] = [];
+  const sources: Layer[] = [];
   const globalAngle = psd.imageResources?.globalAngle ?? 120;
   const docName = fileName.replace(/\.psd$/i, '');
 
@@ -73,6 +76,7 @@ export function psdToIR(psd: Psd, fileName: string): ReadResult {
       unsupportedEffects: [],
     };
     layers.push(layer);
+    sources.push(src);
 
     if (src.mask && !src.mask.fromVectorData) {
       const m = src.mask;
@@ -133,6 +137,7 @@ export function psdToIR(psd: Psd, fileName: string): ReadResult {
   return {
     doc: { name: docName, width: psd.width, height: psd.height, colorMode, bitsPerChannel, rootIds, layers },
     report,
+    sources,
   };
 }
 

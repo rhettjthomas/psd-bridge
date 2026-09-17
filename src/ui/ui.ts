@@ -1,12 +1,14 @@
 /**
- * UI iframe. Owns the file picker, toggles, and PSD parsing (ag-psd uses the
- * browser canvas here; the main thread has none).
+ * UI iframe. Owns the file picker, toggles, and PSD parsing and pixel encoding
+ * (ag-psd uses the browser canvas here; the main thread has none).
  */
-import { readPsd } from 'ag-psd';
-import type { MainToUI, UIToMain } from '../core/messages';
-import type { IRDocument, ReportItem } from '../core/model';
+import { getLayerImageData, readPsd, type Layer, type ReadOptions } from 'ag-psd';
+import { BATCH_BYTE_LIMIT, LAYER_BATCH_SIZE, type MainToUI, type UIToMain } from '../core/messages';
+import type { ImportReport, IRDocument, ReportItem } from '../core/model';
+import { planImport, type PlannedLayer } from '../core/plan';
 import { formatTree, psdToIR } from '../core/psd-reader';
 import { DEFAULT_SETTINGS, type ImportSettings } from '../core/settings';
+import { encodePixels } from './encode';
 
 const TOGGLES: { key: keyof ImportSettings; icon: string; label: string; help: string }[] = [
   { key: 'editableText', icon: 'T', label: 'Editable text', help: 'Converts text layers to Figma text' },
@@ -16,14 +18,43 @@ const TOGGLES: { key: keyof ImportSettings; icon: string; label: string; help: s
   { key: 'flattenGroups', icon: '▤', label: 'Flatten groups', help: 'Places all layers in one frame' },
 ];
 
+const STRUCTURE_ONLY: ReadOptions = {
+  skipThumbnail: true,
+  skipCompositeImageData: true,
+  skipLayerImageData: true,
+  skipLinkedFilesData: true,
+};
+
+// Keep compressed channels and decode one layer at a time, so large PSDs
+// never sit fully decoded in memory.
+const LAZY_PIXELS: ReadOptions = {
+  skipThumbnail: true,
+  skipCompositeImageData: true,
+  skipLinkedFilesData: true,
+  useRawData: true,
+};
+
 const $ = <T extends HTMLElement>(id: string) => document.getElementById(id) as T;
 
 let settings: ImportSettings = { ...DEFAULT_SETTINGS };
-let current: { doc: IRDocument; report: ReportItem[] } | null = null;
+let currentFile: File | null = null;
+let preflight: { doc: IRDocument; report: ReportItem[] } | null = null;
+let importing = false;
+let ackWaiter: { resolve: () => void; reject: (e: Error) => void } | null = null;
 
 function post(msg: UIToMain, transfer: Transferable[] = []) {
   parent.postMessage({ pluginMessage: msg }, '*', transfer);
 }
+
+function waitForAck(): Promise<void> {
+  return new Promise((resolve, reject) => {
+    ackWaiter = { resolve, reject };
+  });
+}
+
+const nextFrame = () => new Promise((r) => setTimeout(r, 0));
+
+// ---------- Rendering ----------
 
 function renderToggles() {
   const root = $('toggles');
@@ -43,6 +74,7 @@ function renderToggles() {
       input.addEventListener('change', () => {
         settings = { ...settings, [t.key]: input.checked };
         post({ type: 'save-settings', settings });
+        renderPreflight();
       });
       return row;
     }),
@@ -68,10 +100,68 @@ function setStatus(label: string | null, fraction = 0) {
   $('progress-bar').style.width = `${Math.round(fraction * 100)}%`;
 }
 
+function setBusy(busy: boolean) {
+  importing = busy;
+  $<HTMLButtonElement>('import-btn').disabled = busy || !preflight;
+  $<HTMLInputElement>('file-input').disabled = busy;
+  for (const el of $('toggles').querySelectorAll('input')) el.disabled = busy;
+}
+
+function renderReport(title: string, items: ReportItem[], imported?: number) {
+  const approx = items.filter((i) => i.level === 'approximated');
+  const skipped = items.filter((i) => i.level === 'skipped');
+  $('report').hidden = false;
+  $('report-title').textContent = title;
+  $('report-counts').textContent = [
+    imported !== undefined ? `${imported} imported` : '',
+    `${approx.length} approximated`,
+    `${skipped.length} skipped`,
+  ].filter(Boolean).join(' · ');
+
+  const groups = [
+    { level: 'approximated', label: 'Approximated', list: approx },
+    { level: 'skipped', label: 'Skipped', list: skipped },
+  ].filter((g) => g.list.length);
+
+  $('report-groups').replaceChildren(
+    ...groups.map((g) => {
+      const details = document.createElement('details');
+      details.className = `level-${g.level}`;
+      const summary = document.createElement('summary');
+      summary.textContent = `${g.label} (${g.list.length})`;
+      const ul = document.createElement('ul');
+      for (const item of g.list) {
+        const li = document.createElement('li');
+        const name = document.createElement('span');
+        name.className = 'item-name';
+        name.textContent = item.layerName;
+        const reason = document.createElement('span');
+        reason.className = 'item-reason';
+        reason.textContent = item.reason;
+        li.append(name, reason);
+        ul.append(li);
+      }
+      details.append(summary, ul);
+      return details;
+    }),
+  );
+}
+
+function renderPreflight() {
+  if (!preflight || importing) return;
+  const plan = planImport(preflight.doc, settings);
+  renderReport('Preflight', [...preflight.report, ...plan.report]);
+}
+
+// ---------- File loading ----------
+
 async function loadFile(file: File) {
-  current = null;
-  $<HTMLButtonElement>('import-btn').disabled = true;
+  if (importing) return;
+  preflight = null;
+  currentFile = null;
+  setBusy(false);
   showNotices([]);
+  $('report').hidden = true;
 
   if (!/\.psd$/i.test(file.name)) {
     showNotices([{ level: 'error', text: `"${file.name}" isn't a .psd file.` }]);
@@ -82,64 +172,136 @@ async function loadFile(file: File) {
   $('dropzone-file').hidden = false;
   $('file-name').textContent = file.name;
   $('file-meta').textContent = `Reading ${formatBytes(file.size)}…`;
-  setStatus('Parsing PSD…', 0);
-  // Let the status paint before the synchronous parse blocks the thread.
-  await new Promise((r) => setTimeout(r, 16));
+  setStatus('Reading PSD…', 0);
+  await nextFrame();
 
   try {
-    const buffer = await file.arrayBuffer();
     const t0 = performance.now();
-    // M1 reads structure only. M2 switches to useImageData and encodes layer PNGs.
-    const psd = readPsd(buffer, {
-      skipThumbnail: true,
-      skipCompositeImageData: true,
-      skipLayerImageData: true,
-      skipLinkedFilesData: true,
-    });
-    const result = psdToIR(psd, file.name);
-    const ms = Math.round(performance.now() - t0);
-    current = result;
-
-    const { doc, report } = result;
-    $('file-meta').textContent = `${doc.width} × ${doc.height} px · ${doc.layers.length} layers · ${formatBytes(file.size)}`;
-    console.log(`[PSD Bridge] Parsed in ${ms} ms\n${formatTree(doc)}`, { doc, report });
+    const psd = readPsd(await file.arrayBuffer(), STRUCTURE_ONLY);
+    const { doc, report } = psdToIR(psd, file.name);
+    console.log(`[PSD Bridge] Parsed in ${Math.round(performance.now() - t0)} ms\n${formatTree(doc)}`, { doc, report });
     post({ type: 'debug-tree', doc });
 
-    showNotices(
-      report
-        .filter((r) => r.layerName === doc.name)
-        .map((r) => ({ level: 'warning' as const, text: r.reason })),
-    );
-    $<HTMLButtonElement>('import-btn').disabled = false;
+    preflight = { doc, report };
+    currentFile = file;
+    $('file-meta').textContent = `${doc.width} × ${doc.height} px · ${doc.layers.length} layers · ${formatBytes(file.size)}`;
+    renderPreflight();
   } catch (err) {
     console.error('[PSD Bridge] Parse failed', err);
     $('file-meta').textContent = formatBytes(file.size);
-    const detail = err instanceof Error ? err.message : String(err);
-    const text = /signature/i.test(detail)
-      ? `"${file.name}" isn't a valid Photoshop document. Re-save it from Photoshop and try again.`
-      : `Couldn't read this PSD: ${detail}`;
-    showNotices([{ level: 'error', text }]);
+    showNotices([{ level: 'error', text: parseErrorMessage(file.name, err) }]);
   } finally {
     setStatus(null);
+    setBusy(false);
   }
 }
 
-function onImport() {
-  if (!current) return;
-  // M1: log the tree on the main thread. Node building arrives in M2.
-  post({ type: 'debug-tree', doc: current.doc });
-  const skipped = current.report.filter((r) => r.level === 'skipped').length;
-  const approx = current.report.filter((r) => r.level === 'approximated').length;
-  showNotices([
-    { level: 'warning', text: `Import isn't built yet (Milestone 2). The layer tree was logged to the console.` },
-    { level: 'warning', text: `Preflight: ${approx} approximated, ${skipped} skipped.` },
-  ]);
+function parseErrorMessage(name: string, err: unknown): string {
+  const detail = err instanceof Error ? err.message : String(err);
+  if (/signature/i.test(detail)) return `"${name}" isn't a valid Photoshop document. Re-save it from Photoshop and try again.`;
+  if (/memory|allocation|array buffer/i.test(detail)) return `"${name}" is too large to load. Close other plugins or flatten unused layers, then try again.`;
+  return `Couldn't read this PSD: ${detail}`;
+}
+
+// ---------- Import ----------
+
+async function runImport() {
+  if (!currentFile || !preflight || importing) return;
+  const file = currentFile;
+  setBusy(true);
+  showNotices([]);
+  $('report').hidden = true;
+  setStatus('Reading layers…', 0);
+  await nextFrame();
+
+  let begun = false;
+  try {
+    const psd = readPsd(await file.arrayBuffer(), LAZY_PIXELS);
+    const { doc, report: readReport, sources } = psdToIR(psd, file.name);
+    const plan = planImport(doc, settings);
+    const { layers: _all, ...docInfo } = doc;
+    const encodeReport: ReportItem[] = [];
+
+    post({
+      type: 'import-begin',
+      doc: docInfo,
+      settings,
+      totalLayers: plan.layers.length,
+      preflight: [...readReport, ...plan.report],
+    });
+    begun = true;
+
+    let batch: PlannedLayer[] = [];
+    let transfer: ArrayBuffer[] = [];
+    let bytes = 0;
+    const flush = async () => {
+      if (!batch.length) return;
+      const ack = waitForAck();
+      post({ type: 'layers-batch', layers: batch }, transfer);
+      batch = [];
+      transfer = [];
+      bytes = 0;
+      await ack;
+    };
+
+    for (let i = 0; i < plan.layers.length; i++) {
+      const layer = plan.layers[i];
+      if (layer.action === 'raster') {
+        setStatus(`Encoding layer ${i + 1} of ${plan.layers.length}`, i / plan.layers.length);
+        const png = await rasterize(sources[layer.id], layer, encodeReport);
+        if (png) {
+          transfer.push(png.buffer as ArrayBuffer);
+          bytes += png.byteLength;
+        }
+      }
+      batch.push(layer);
+      if (batch.length >= LAYER_BATCH_SIZE || bytes >= BATCH_BYTE_LIMIT) await flush();
+    }
+    await flush();
+
+    setStatus('Finishing…', 1);
+    post({ type: 'import-end', report: encodeReport });
+  } catch (err) {
+    console.error('[PSD Bridge] Import failed', err);
+    if (begun) post({ type: 'import-abort', message: String(err) });
+    setStatus(null);
+    setBusy(false);
+    showNotices([{ level: 'error', text: `Import stopped: ${err instanceof Error ? err.message : String(err)}` }]);
+  }
+}
+
+/** Decodes one layer, encodes it to PNG, attaches it to the planned layer, and frees the source. */
+async function rasterize(src: Layer, layer: PlannedLayer, report: ReportItem[]): Promise<Uint8Array | null> {
+  try {
+    const pixels = getLayerImageData(src);
+    if (!pixels) {
+      report.push({ level: 'skipped', layerName: layer.name, reason: 'No pixel data in the PSD.' });
+      return null;
+    }
+    const enc = await encodePixels(pixels);
+    layer.image = { width: enc.width, height: enc.height, png: enc.png, downscaled: enc.downscaled };
+    return enc.png;
+  } catch (err) {
+    report.push({ level: 'skipped', layerName: layer.name, reason: `Couldn't decode pixels: ${err instanceof Error ? err.message : String(err)}` });
+    return null;
+  } finally {
+    delete src.rawData;
+  }
+}
+
+function onReport(report: ImportReport) {
+  setStatus(null);
+  setBusy(false);
+  renderReport('Import report', report.items, report.imported);
+  $('report').scrollIntoView({ behavior: 'smooth', block: 'start' });
 }
 
 function formatBytes(n: number): string {
   if (n < 1024 * 1024) return `${Math.max(1, Math.round(n / 1024))} KB`;
   return `${(n / (1024 * 1024)).toFixed(1)} MB`;
 }
+
+// ---------- Wiring ----------
 
 window.onmessage = (event: MessageEvent) => {
   const msg = event.data?.pluginMessage as MainToUI | undefined;
@@ -150,15 +312,22 @@ window.onmessage = (event: MessageEvent) => {
       $('version').textContent = `v${msg.version}`;
       renderToggles();
       break;
+    case 'batch-ack':
+      ackWaiter?.resolve();
+      ackWaiter = null;
+      break;
     case 'progress':
       setStatus(msg.label, msg.total ? msg.done / msg.total : 0);
       break;
-    case 'error':
-      setStatus(null);
-      showNotices([{ level: 'error', text: msg.message }]);
-      break;
     case 'report':
+      onReport(msg.report);
+      break;
+    case 'error':
+      ackWaiter?.reject(new Error(msg.message));
+      ackWaiter = null;
       setStatus(null);
+      setBusy(false);
+      showNotices([{ level: 'error', text: msg.message }]);
       break;
   }
 };
@@ -183,7 +352,7 @@ dropzone.addEventListener('drop', (e) => {
   if (file) void loadFile(file);
 });
 
-$('import-btn').addEventListener('click', onImport);
+$('import-btn').addEventListener('click', () => void runImport());
 $('settings-btn').addEventListener('click', () => {
   showNotices([{ level: 'warning', text: 'Settings (font map import/export, reset) arrive with Milestones 5–6.' }]);
 });

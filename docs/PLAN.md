@@ -40,16 +40,19 @@ src/core/units.ts        Shadow offsets, tracking, opacity, downscale math
 src/core/fonts.ts        PostScript name parsing + font matching
 src/core/messages.ts     Typed postMessage protocol (UI ⇄ main)
 src/core/settings.ts     Toggle defaults
+src/core/plan.ts         Per-layer import action, based on the toggles
+src/main/importer.ts     Builds frames, groups, and image fills (main thread)
+src/ui/encode.ts         Pixel data → PNG, with downscaling
 src/ui/ui.html|css|ts    Plugin window; runs ag-psd with the browser canvas
-test/                    Vitest specs for src/core
+test/                    Vitest specs (core, planner, importer via a Figma API mock)
 ```
 
 ## Data flow
 
-1. **UI:** the user picks a `.psd` file. `readPsd(buf, { skipThumbnail: true, useImageData: true })` parses it.
+1. **UI:** the user picks a `.psd` file. A structure-only parse builds the preflight report. On Import, the PSD is re-read with `useRawData`, so pixels stay compressed until each layer is needed.
 2. **UI:** `psd-reader` walks the tree, top to bottom, and builds the IR. Each pixel
-   layer's `imageData` is encoded to PNG bytes (`Uint8Array`) with `OffscreenCanvas`. A layer
-   larger than 4096 px on either side is downscaled first, and the downscale is reported.
+   layer is decoded on its own (`getLayerImageData`) and encoded to PNG bytes with `OffscreenCanvas`,
+   and its raw data is then freed. A layer larger than 4096 px is downscaled and reported.
 3. **UI → main:** `import-begin` (doc info and options), then `layers-batch` messages
    (a flat list with parent ids, in batches), then `import-end`. The bytes are sent as
    transferables, never as base64.
@@ -59,7 +62,7 @@ test/                    Vitest specs for src/core
 
 ## Milestones
 
-### M1 — Scaffold ✅ (this commit)
+### M1 — Scaffold ✅
 - Manifest, build, and typecheck work. The plugin loads in Figma desktop, and the UI opens.
 - Picking a PSD parses it. The UI shows the file name, dimensions, and layer count. The layer
   tree (IR) is logged in the UI console and in the main-thread console.
@@ -68,7 +71,13 @@ test/                    Vitest specs for src/core
 - Core unit tests pass. `npm run inspect <file.psd>` prints the tree.
 - **Done when:** the Figma desktop plugin runs and logs the tree of a real sermon PSD.
 
-### M2 — Pixel layers
+### M2 — Pixel layers ✅ (built; needs a check in Figma with a real PSD)
+Built: re-reads the PSD with `useRawData` and decodes one layer at a time. Encodes PNGs in
+the UI and sends batches of 20 layers or 48 MB, whichever comes first, waiting for the main
+thread to confirm each batch. Groups start as placeholder frames and become real Figma groups at
+the end (this pulls group structure, visibility, blend modes, and the flatten and hidden toggles
+forward from M3). The report panel lists every item by layer name.
+Until M4 and M5 land, shapes and text import as pixels, and the report lists them.
 - PNG encoding in the UI, batched transfer, `figma.createImage`, and a rectangle with an image fill.
 - A document frame named after the file, with each layer at its left/top offset.
 - Opacity is layer opacity × fill opacity. Stacking order matches Photoshop.

@@ -16,6 +16,7 @@
 }
 
 * { box-sizing: border-box; }
+[hidden] { display: none !important; }
 
 html, body {
   margin: 0;
@@ -95,7 +96,6 @@ button { font: inherit; color: inherit; }
 }
 .dropzone:hover, .dropzone.dragover { border-color: var(--text-secondary); }
 .dropzone-empty, .dropzone-file { display: flex; flex-direction: column; gap: 4px; }
-.dropzone [hidden] { display: none; }
 .file-name { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 
 .toggles {
@@ -168,3 +168,23 @@ button { font: inherit; color: inherit; }
 }
 .primary:hover:not(:disabled) { background: var(--accent-hover); }
 .primary:disabled { opacity: 0.4; cursor: not-allowed; }
+
+.report {
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: var(--space) calc(var(--space) * 1.5);
+  display: flex;
+  flex-direction: column;
+  gap: var(--space);
+}
+.report-head { display: flex; justify-content: space-between; align-items: baseline; gap: var(--space); }
+.report-counts { color: var(--text-secondary); font-size: 11px; }
+.report details { font-size: 11px; }
+.report details + details { margin-top: 4px; }
+.report summary { cursor: pointer; font-weight: 500; }
+.report ul { margin: 4px 0 0; padding: 0; list-style: none; display: flex; flex-direction: column; gap: 4px; }
+.report li { display: flex; flex-direction: column; }
+.report .item-name { font-weight: 500; overflow-wrap: anywhere; }
+.report .item-reason { color: var(--text-secondary); }
+.report .level-skipped summary { color: var(--text-danger); }
+.report .level-approximated summary { color: var(--text-warning); }
