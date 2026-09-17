@@ -46,8 +46,8 @@ export function fitImageSize(width: number, height: number, max = FIGMA_MAX_IMAG
  */
 export function transformScale(t: number[] | undefined): number {
   if (!t || t.length < 4) return 1;
-  const [, xy, , yy] = t;
-  const s = Math.hypot(xy, yy);
+  // The y basis vector is (yx, yy); its length is the vertical scale.
+  const s = Math.hypot(t[2], t[3]);
   return s > 0 ? s : 1;
 }
 

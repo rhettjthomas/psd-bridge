@@ -14,6 +14,8 @@ const { doc, report } = psdToIR(
 /** Runs a full import with fake PNGs, the way the UI would send it. */
 async function runImport(settings: ImportSettings = DEFAULT_SETTINGS) {
   const { Importer } = await import('../src/main/importer');
+  const { loadFonts } = await import('../src/main/text');
+  const fonts = await loadFonts({ 'Inter-Bold': { family: 'Inter', style: 'Bold' } }, []);
   const plan = planImport(doc, settings);
   const png = { png: new Uint8Array([1]), downscaled: false };
   for (const l of plan.layers) {
@@ -27,7 +29,7 @@ async function runImport(settings: ImportSettings = DEFAULT_SETTINGS) {
     }
   }
   const { layers, ...info } = doc;
-  const imp = new Importer(info, settings, plan.layers.length, [...report, ...plan.report]);
+  const imp = new Importer(info, settings, plan.layers.length, [...report, ...plan.report], fonts.resolved);
   imp.addBatch(plan.layers.slice(0, 3));
   imp.addBatch(plan.layers.slice(3));
   const result = imp.finish([]);
@@ -52,6 +54,7 @@ describe('Importer', () => {
       '      RECTANGLE Layer mask @100,100 300x200 mask:LUMINANCE',
       '      RECTANGLE Vignette (masked) @0,0 960x540',
       '    RECTANGLE Glow (unsupported) @1200,700 200x200',
+      '  TEXT Title @240,813.6 100x100 fx:DROP_SHADOW',
       '  GROUP Badge (vector mask) @0,0 100x100',
       '    VECTOR Vector mask @1500,100 300x300 mask:VECTOR',
       '    RECTANGLE Badge (vector mask) @1500,100 300x300',
@@ -64,11 +67,17 @@ describe('Importer', () => {
       '    VECTOR Ribbon (path + gradient) @600,950 300x80',
       '    VECTOR Rule (open path) @950,990 200x0',
       '    RECTANGLE Noise (unsupported) @1200,950 100x60',
+      '  GROUP Type @0,0 100x100',
+      '    TEXT Series title (runs) @910,68 100x100',
+      '    TEXT Body (box) @1300,700 400x120',
+      '    RECTANGLE Arched (warped) @100,100 300x60',
+      '    TEXT Side note (rotated) @43.8,900 100x100',
       '  RECTANGLE Source photo (hidden) @0,0 400x300 hidden',
     ]);
     expect(frame.fills).toEqual([]);
-    // 10 image layers + 4 shapes + 3 PSD groups; the synthetic clipping group isn't counted.
-    expect(result.imported).toBe(17);
+    // 11 image layers + 4 shapes + 4 text + 4 PSD groups; the synthetic clipping group isn't counted.
+    expect(result.imported).toBe(23);
+    expect(result.items).not.toContainEqual(expect.objectContaining({ reason: expect.stringMatching(/^Failed/) }));
     expect(result.items).toContainEqual(expect.objectContaining({ layerName: 'Background', level: 'approximated' }));
   });
 

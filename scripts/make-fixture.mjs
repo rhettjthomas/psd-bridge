@@ -1,7 +1,7 @@
 // Writes test/fixtures/sample.psd: a small synthetic sermon-series comp that covers
 // the mapping rules (groups, hidden, opacity, blend modes, clipping, pixel and vector
 // masks, masked groups, drop/inner shadows, live and path shapes with solid, gradient,
-// and noise fills and strokes, text, and an adjustment layer). Real client PSDs are gitignored.
+// and noise fills and strokes, text (runs, box, warped, rotated), and an adjustment layer). Real client PSDs are gitignored.
 import { writePsdBuffer } from 'ag-psd';
 import { mkdir, writeFile } from 'node:fs/promises';
 
@@ -168,6 +168,58 @@ const psd = {
           imageData: solid(100, 60, [128, 128, 128]),
           left: 1200, top: 950, right: 1300, bottom: 1010,
         }),
+      ],
+    },
+    {
+      name: 'Type',
+      opened: true,
+      children: [
+        {
+          name: 'Series title (runs)',
+          left: 960, top: 60, right: 960, bottom: 60,
+          text: {
+            text: 'Grace\rUpon Grace',
+            transform: [2, 0, 0, 2, 960, 140],
+            style: { font: { name: 'Inter-Bold' }, fontSize: 40, autoLeading: true, fillColor: { r: 255, g: 255, b: 255 } },
+            styleRuns: [
+              { length: 6, style: { font: { name: 'Inter-Bold' }, fontSize: 40, tracking: 100, fontCaps: 2 } },
+              { length: 11, style: { font: { name: 'NeueHaasGroteskDisp-XBlk' }, fontSize: 30, autoLeading: false, leading: 36, fillColor: { r: 198, g: 244, b: 50 }, underline: true } },
+            ],
+            paragraphStyle: { justification: 'center' },
+          },
+        },
+        {
+          name: 'Body (box)',
+          left: 1300, top: 700, right: 1300, bottom: 700,
+          text: {
+            text: 'Join us Sundays at 9 and 11.',
+            transform: [1, 0, 0, 1, 1300, 700],
+            shapeType: 'box',
+            boxBounds: [0, 0, 400, 120],
+            style: { font: { name: 'ArialMT' }, fontSize: 24, fillColor: { r: 230, g: 230, b: 230 } },
+            paragraphStyle: { justification: 'left' },
+          },
+        },
+        {
+          name: 'Arched (warped)',
+          left: 100, top: 100, right: 400, bottom: 160,
+          imageData: solid(300, 60, [255, 255, 255]),
+          text: {
+            text: 'ARCHED',
+            transform: [1, 0, 0, 1, 100, 150],
+            style: { font: { name: 'Inter-Bold' }, fontSize: 48 },
+            warp: { style: 'arc', value: 30, perspective: 0, perspectiveOther: 0, rotate: 'horizontal' },
+          },
+        },
+        {
+          name: 'Side note (rotated)',
+          left: 50, top: 600, right: 50, bottom: 600,
+          text: {
+            text: 'Week 1',
+            transform: [0, -1, 1, 0, 60, 900],
+            style: { font: { name: 'Inter-Regular' }, fontSize: 18, fauxBold: true },
+          },
+        },
       ],
     },
     px('Source photo (hidden)', 0, 0, 400, 300, [90, 90, 90], { hidden: true }),

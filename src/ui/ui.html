@@ -34,6 +34,26 @@
     </div>
   </label>
 
+  <section class="fonts" id="fonts" aria-label="Font matching" hidden>
+    <div class="fonts-head">
+      <strong>Font matching</strong>
+      <span class="muted" id="fonts-count"></span>
+      <button type="button" class="link" id="rescan-fonts">Rescan fonts</button>
+    </div>
+    <p class="fonts-help muted">
+      Choose a replacement for each font Figma can't find. Adobe Fonts activated in Creative Cloud
+      often don't appear in Figma: pick the closest installed font, or install a desktop license
+      from the foundry and rescan.
+    </p>
+    <div id="font-rows"></div>
+    <div class="fonts-actions">
+      <button type="button" class="link" id="export-map">Export font map</button>
+      <button type="button" class="link" id="import-map">Import font map</button>
+      <input type="file" id="map-input" accept=".json,application/json" hidden />
+    </div>
+    <datalist id="family-list"></datalist>
+  </section>
+
   <section class="toggles" id="toggles" aria-label="Import options"></section>
 
   <section class="notices" id="notices" hidden></section>

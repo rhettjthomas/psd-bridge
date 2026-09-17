@@ -46,6 +46,8 @@ src/core/shapes.ts       Shape layers → native rect/ellipse or path, with fill
 src/core/paint.ts        Solid/gradient/pattern paints, stop merging, gradient transform
 src/core/color.ts        ag-psd colors → RGBA
 src/main/paints.ts       Paints and strokes applied to Figma nodes
+src/main/text.ts         Font loading and editable text nodes (with glyph-bounds alignment)
+src/ui/fonts-panel.ts    The font matching window
 src/main/importer.ts     Builds frames, groups, and image fills (main thread)
 src/ui/encode.ts         Pixel data → PNG, with downscaling
 src/ui/ui.html|css|ts    Plugin window; runs ag-psd with the browser canvas
@@ -117,7 +119,7 @@ From the brief:
   adjustment layers are reported.
 - **Done when:** the result matches Photoshop side by side.
 
-### M4 — Vector shapes ✅ (built; needs a check in Figma)
+### M4 — Vector shapes ✅
 How it's built:
 - **Native shapes:** a single, unrotated live rectangle, rounded rectangle, or ellipse
   (`vectorOrigination`) becomes a native Figma shape. Corner radii are scaled by the shape's
@@ -146,7 +148,31 @@ From the brief:
 - The "Editable vectors" toggle works; when it is off, shapes import as pixels.
 - **Done when:** the outline, fill, and stroke match Photoshop.
 
-### M5 — Text and font matching
+### M5 — Text and font matching ✅ (built; needs a check in Figma with real fonts)
+How it's built:
+- **Matching:** on file load, the UI collects every PostScript font the text layers use and
+  asks the main thread to match them. The main thread matches by family and style, drops
+  common suffixes (MT, PSMT, Std, Pro), then tries saved matches. Any missing font opens the
+  matching window, and Import is blocked until each missing font has a replacement or is
+  skipped.
+- **Matching window:** a family field that searches installed families, a style list, a live
+  preview of the layer's text, Remember this match, Skip, Rescan fonts (re-reads Figma's font
+  list), and Export/Import font map (JSON). Guesses pre-fill abbreviated family names.
+- **Font loading:** the main thread handles messages in order and loads every chosen font once,
+  in `import-begin`, before any layers arrive. Fonts that fail to load, and skipped fonts, use
+  Inter Regular and are reported.
+- **Text nodes:** runs set font, size (× transform scale), fill, tracking (÷ 10 → %), fixed or
+  auto leading, underline or strikethrough, and all caps or small caps. Point text is
+  auto-width; box text is fixed-width at the box's width.
+- **Position:** the node starts from the text transform, then its rendered glyph bounds
+  (`absoluteRenderBounds`) are aligned to the PSD layer's pixel bounds. Point text aligns by
+  its anchor edge; box text aligns vertically only. Rotated text is placed and rotated from
+  the transform.
+- **Imported as pixels and reported:** warped, on-path, and vertical text.
+- **Reported:** faux bold or italic, character scaling, baseline shift,
+  superscript/subscript, text stroke, mixed paragraph alignment, and uneven scaling.
+
+From the brief:
 - Match PostScript names to `listAvailableFontsAsync` by family and style, then by saved
   matches. Anything still unmatched goes to the font matching window.
 - The matching window: missing fonts with their styles and layers, a replacement picker with a

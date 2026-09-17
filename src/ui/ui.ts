@@ -17,6 +17,8 @@ import { planImport, type PlannedLayer } from '../core/plan';
 import { formatTree, psdToIR } from '../core/psd-reader';
 import { DEFAULT_SETTINGS, type ImportSettings } from '../core/settings';
 import { encodeMask, encodePixels } from './encode';
+import { FontsPanel } from './fonts-panel';
+import { collectFontUsage } from '../core/fonts';
 
 const TOGGLES: { key: keyof ImportSettings; icon: string; label: string; help: string }[] = [
   { key: 'editableText', icon: 'T', label: 'Editable text', help: 'Converts text layers to Figma text' },
@@ -62,6 +64,28 @@ function waitForAck(): Promise<void> {
 
 const nextFrame = () => new Promise((r) => setTimeout(r, 0));
 
+const fontsPanel = new FontsPanel({
+  root: $('fonts'),
+  rescan: () => requestFonts(),
+  saveFontMap: (fontMap) => post({ type: 'save-font-map', fontMap }),
+  onChange: () => updateImportButton(),
+  notify: (level, text) => showNotices([{ level, text }]),
+});
+
+function requestFonts() {
+  const names = preflight ? collectFontUsage(preflight.doc.layers).map((u) => u.postScriptName) : [];
+  if (names.length) post({ type: 'resolve-fonts', postScriptNames: names });
+}
+
+function updateImportButton() {
+  const btn = $<HTMLButtonElement>('import-btn');
+  btn.disabled = importing || !preflight || !fontsPanel.ready;
+  const missing = fontsPanel.missing.length;
+  btn.textContent = !fontsPanel.ready && !fontsPanel.pending && missing
+    ? `Match ${missing} missing font${missing === 1 ? '' : 's'} to import`
+    : 'Import to Figma';
+}
+
 // ---------- Rendering ----------
 
 function renderToggles() {
@@ -82,6 +106,7 @@ function renderToggles() {
       input.addEventListener('change', () => {
         settings = { ...settings, [t.key]: input.checked };
         post({ type: 'save-settings', settings });
+        fontsPanel.setEnabled(settings.editableText);
         renderPreflight();
       });
       return row;
@@ -110,7 +135,7 @@ function setStatus(label: string | null, fraction = 0) {
 
 function setBusy(busy: boolean) {
   importing = busy;
-  $<HTMLButtonElement>('import-btn').disabled = busy || !preflight;
+  updateImportButton();
   $<HTMLInputElement>('file-input').disabled = busy;
   for (const el of $('toggles').querySelectorAll('input')) el.disabled = busy;
 }
@@ -167,6 +192,7 @@ async function loadFile(file: File) {
   if (importing) return;
   preflight = null;
   currentFile = null;
+  fontsPanel.reset([]);
   setBusy(false);
   showNotices([]);
   $('report').hidden = true;
@@ -192,6 +218,8 @@ async function loadFile(file: File) {
 
     preflight = { doc, report };
     currentFile = file;
+    fontsPanel.reset(collectFontUsage(doc.layers));
+    requestFonts();
     $('file-meta').textContent = `${doc.width} × ${doc.height} px · ${doc.layers.length} layers · ${formatBytes(file.size)}`;
     renderPreflight();
   } catch (err) {
@@ -214,7 +242,7 @@ function parseErrorMessage(name: string, err: unknown): string {
 // ---------- Import ----------
 
 async function runImport() {
-  if (!currentFile || !preflight || importing) return;
+  if (!currentFile || !preflight || importing || !fontsPanel.ready) return;
   const file = currentFile;
   setBusy(true);
   showNotices([]);
@@ -230,6 +258,9 @@ async function runImport() {
     const plan = planImport(doc, settings);
     const { layers: _all, ...docInfo } = doc;
     const encodeReport: ReportItem[] = [];
+    const fonts = fontsPanel.resolve();
+    post({ type: 'save-font-map', fontMap: fonts.fontMap });
+    fontsPanel.setFontMap(fonts.fontMap);
 
     post({
       type: 'import-begin',
@@ -237,6 +268,8 @@ async function runImport() {
       settings,
       totalLayers: plan.layers.length,
       preflight: [...readReport, ...plan.report],
+      fonts: fonts.fonts,
+      skippedFonts: fonts.skipped,
     });
     begun = true;
 
@@ -386,8 +419,13 @@ window.onmessage = (event: MessageEvent) => {
   switch (msg.type) {
     case 'init':
       settings = msg.settings;
+      fontsPanel.setFontMap(msg.fontMap);
+      fontsPanel.setEnabled(settings.editableText);
       $('version').textContent = `v${msg.version}`;
       renderToggles();
+      break;
+    case 'fonts':
+      fontsPanel.update(msg.matches, msg.families, msg.fontMap);
       break;
     case 'batch-ack':
       ackWaiter?.resolve();

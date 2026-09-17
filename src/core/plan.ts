@@ -8,7 +8,7 @@ import type { ImportSettings } from './settings';
 /** Features switch on as their milestones land. */
 export const FEATURES = {
   editableVectors: true, // M4
-  editableText: false, // M5
+  editableText: true, // M5
 };
 
 /**
@@ -16,9 +16,10 @@ export const FEATURES = {
  * clip:   a synthetic group holding a clipping base and the layers clipped to it;
  *         the importer masks it with a copy of the base.
  * vector: a shape layer placed as an editable shape.
+ * text:   a text layer placed as editable Figma text.
  * raster: a layer placed as an image.
  */
-export type LayerAction = 'group' | 'clip' | 'vector' | 'raster';
+export type LayerAction = 'group' | 'clip' | 'vector' | 'text' | 'raster';
 
 export interface PlannedLayer extends IRLayer {
   action: LayerAction;
@@ -93,6 +94,7 @@ export function planImport(doc: IRDocument, settings: ImportSettings): ImportPla
   const emittable = (l: IRLayer) =>
     l.kind === 'group' ||
     (l.kind === 'shape' && settings.editableVectors && !!l.shape && !l.shape.unsupported) ||
+    (l.kind === 'text' && editableText(l)) ||
     (l.kind !== 'adjustment' && l.bounds.width > 0 && l.bounds.height > 0);
 
   const emit = (l: IRLayer, parentId: number | null, hiddenAncestor: boolean, keepGroup = false) => {
@@ -123,6 +125,13 @@ export function planImport(doc: IRDocument, settings: ImportSettings): ImportPla
       return;
     }
 
+    if (l.kind === 'text' && l.text && editableText(l)) {
+      for (const w of l.text.warnings) report.push({ level: 'approximated', layerName: l.name, reason: w });
+      pushShadowReport(l);
+      layers.push({ ...l, action: 'text', parentId });
+      return;
+    }
+
     // Empty layers are reported by the reader when they're pixel layers.
     if (l.bounds.width <= 0 || l.bounds.height <= 0) {
       if (l.kind !== 'pixel') report.push({ level: 'skipped', layerName: l.name, reason: 'Layer has no pixels.' });
@@ -135,18 +144,15 @@ export function planImport(doc: IRDocument, settings: ImportSettings): ImportPla
         : `Shape imported as pixels: ${l.shape?.unsupported ?? 'unreadable shape data.'}`;
       report.push({ level: 'approximated', layerName: l.name, reason });
     }
-    if (l.kind === 'text' && !l.text?.warped && !(settings.editableText && FEATURES.editableText)) {
-      report.push({
-        level: 'approximated',
-        layerName: l.name,
-        reason: settings.editableText
-          ? 'Text imported as pixels (editable text arrives in Milestone 5).'
-          : 'Text imported as pixels ("Editable text" is off).',
-      });
+    if (l.kind === 'text' && !settings.editableText) {
+      report.push({ level: 'approximated', layerName: l.name, reason: 'Text imported as pixels ("Editable text" is off).' });
     }
     pushShadowReport(l);
     layers.push({ ...l, action: 'raster', parentId });
   };
+
+  const editableText = (l: IRLayer) =>
+    settings.editableText && FEATURES.editableText && !!l.text && !l.text.warped && !l.text.vertical && l.text.content.length > 0;
 
   const pushShadowReport = (l: IRLayer) => {
     if (l.shadows.length && !settings.rebuildShadows) {

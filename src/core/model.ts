@@ -90,26 +90,41 @@ export interface IRTextRun {
   start: number;
   end: number;
   postScriptName?: string;
+  /** Font size in document px (layer transform already applied). */
   fontSize?: number;
   color?: RGBA;
   /** Photoshop tracking, 1/1000 em. */
   tracking?: number;
-  /** Fixed leading in px; undefined = auto. */
+  /** Fixed leading in document px; undefined = auto. */
   leading?: number;
+  underline?: boolean;
+  strikethrough?: boolean;
+  caps?: 'UPPER' | 'SMALL_CAPS';
 }
 
 export interface IRText {
   content: string;
   kind: 'point' | 'box';
-  /** Box width/height for paragraph text (document px, already scaled). */
+  /** Box size for paragraph text (document px, already scaled). */
   boxWidth?: number;
   boxHeight?: number;
-  /** Uniform scale taken from the text transform; multiply font sizes by this. */
+  /**
+   * Document-space anchor: for point text, the first baseline's anchor (left, center, or
+   * right edge by alignment); for box text, the box's top-left corner.
+   */
+  origin: { x: number; y: number };
+  /** Uniform scale taken from the text transform; font sizes are already multiplied by it. */
   scale: number;
+  /** Clockwise rotation in degrees, from the text transform. */
+  rotation: number;
   align: 'LEFT' | 'CENTER' | 'RIGHT' | 'JUSTIFIED';
   runs: IRTextRun[];
   /** Warped or on-path text can't be editable in Figma; it imports as pixels. */
   warped: boolean;
+  /** Vertical text is out of scope; it imports as pixels. */
+  vertical: boolean;
+  /** Things that will be approximated if this text is imported as editable. */
+  warnings: string[];
 }
 
 export interface IRLayer {

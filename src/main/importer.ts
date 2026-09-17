@@ -17,6 +17,7 @@ import type { PlannedLayer } from '../core/plan';
 import type { ImportSettings } from '../core/settings';
 import type { IRShape } from '../core/shapes';
 import { applyShapePaints } from './paints';
+import { buildTextNode } from './text';
 
 type Container = BaseNode & ChildrenMixin;
 
@@ -35,6 +36,7 @@ export class Importer {
     readonly settings: ImportSettings,
     readonly total: number,
     preflight: ReportItem[],
+    private readonly fonts = new Map<string, FontName>(),
   ) {
     this.report = [...preflight];
     const frame = figma.createFrame();
@@ -80,7 +82,10 @@ export class Importer {
       return;
     }
 
-    const content = layer.action === 'vector' ? this.shapeNode(parent, layer) : this.imageNode(parent, layer);
+    const content =
+      layer.action === 'vector' ? this.shapeNode(parent, layer)
+      : layer.action === 'text' ? this.textNode(parent, layer)
+      : this.imageNode(parent, layer);
     if (!content) return;
 
     let node: SceneNode & BlendMixin = content;
@@ -95,6 +100,11 @@ export class Importer {
     this.applyCommon(node, layer);
     this.imported++;
     this.placed.add(layer.id);
+  }
+
+  private textNode(parent: Container, layer: PlannedLayer): TextNode {
+    const origin = { x: this.frame.absoluteTransform[0][2], y: this.frame.absoluteTransform[1][2] };
+    return buildTextNode(parent, layer, this.fonts, origin);
   }
 
   private imageNode(parent: Container, layer: PlannedLayer): RectangleNode | null {

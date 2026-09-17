@@ -188,3 +188,64 @@ button { font: inherit; color: inherit; }
 .report .item-reason { color: var(--text-secondary); }
 .report .level-skipped summary { color: var(--text-danger); }
 .report .level-approximated summary { color: var(--text-warning); }
+
+.link {
+  border: 0;
+  padding: 0;
+  background: none;
+  color: var(--figma-color-text-brand, #0d99ff);
+  font-size: 11px;
+  cursor: pointer;
+}
+.link:hover { text-decoration: underline; }
+
+.fonts {
+  border: 1px solid var(--text-warning);
+  border-radius: var(--radius);
+  padding: var(--space) calc(var(--space) * 1.5);
+  display: flex;
+  flex-direction: column;
+  gap: var(--space);
+}
+.fonts-head { display: flex; align-items: baseline; gap: var(--space); }
+.fonts-head .link { margin-left: auto; }
+.fonts-help { margin: 0; font-size: 11px; line-height: 14px; }
+.fonts-actions { display: flex; gap: calc(var(--space) * 2); }
+
+.font-row {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  padding-top: var(--space);
+  border-top: 1px solid var(--border);
+}
+.font-ps { font-size: 11px; overflow-wrap: anywhere; }
+.font-pick { display: flex; gap: 4px; }
+.font-pick input, .font-pick select {
+  min-width: 0;
+  height: 28px;
+  padding: 0 6px;
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  background: var(--bg);
+  color: var(--text);
+  font: inherit;
+  font-size: 11px;
+}
+.font-pick input { flex: 3; }
+.font-pick select { flex: 2; }
+.font-pick :focus { outline: 1px solid var(--figma-color-border-brand-strong, #0d99ff); outline-offset: -1px; }
+.font-preview {
+  padding: 4px 6px;
+  border-radius: 4px;
+  background: var(--bg-secondary);
+  font-size: 16px;
+  line-height: 22px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.font-preview.empty { color: var(--text-secondary); }
+.font-opts { display: flex; justify-content: space-between; align-items: center; font-size: 11px; }
+.font-opts label { display: flex; align-items: center; gap: 4px; }
+.font-row.skipped .font-pick, .font-row.skipped .font-preview { opacity: 0.4; }

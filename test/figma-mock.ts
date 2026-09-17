@@ -58,6 +58,50 @@ export class MockNode {
   get vectorPaths() {
     return this.paths;
   }
+  // --- Text (only what the importer uses) ---
+  characters = '';
+  private _fontName = { family: 'Inter', style: 'Regular' };
+  ranges: Record<string, unknown>[] = [];
+  textAlignHorizontal = 'LEFT';
+  textAutoResize = 'NONE';
+  rotation = 0;
+  fontSize = 12;
+  get fontName() {
+    return this._fontName;
+  }
+  set fontName(f: { family: string; style: string }) {
+    requireLoaded(f);
+    this._fontName = f;
+  }
+  setRangeFontName(start: number, end: number, f: { family: string; style: string }) {
+    requireLoaded(f);
+    this.ranges.push({ start, end, fontName: f });
+  }
+  setRangeFontSize(start: number, end: number, v: number) {
+    this.fontSize = Math.max(this.fontSize === 12 ? 0 : this.fontSize, v);
+    this.ranges.push({ start, end, fontSize: v });
+  }
+  setRangeFills(start: number, end: number, v: unknown) { this.ranges.push({ start, end, fills: v }); }
+  setRangeLetterSpacing(start: number, end: number, v: unknown) { this.ranges.push({ start, end, letterSpacing: v }); }
+  setRangeLineHeight(start: number, end: number, v: unknown) { this.ranges.push({ start, end, lineHeight: v }); }
+  setRangeTextDecoration(start: number, end: number, v: unknown) { this.ranges.push({ start, end, textDecoration: v }); }
+  setRangeTextCase(start: number, end: number, v: unknown) { this.ranges.push({ start, end, textCase: v }); }
+  get absoluteTransform() {
+    let x = 0;
+    let y = 0;
+    for (let n: MockNode | null = this; n && n.type !== 'PAGE'; n = n.parent) {
+      x += n.x;
+      y += n.y;
+    }
+    return [[1, 0, x], [0, 1, y]];
+  }
+  /** Fake glyph bounds: ink starts 0.2 em below the node's top and 2px in from its left. */
+  get absoluteRenderBounds() {
+    if (this.type !== 'TEXT') return null;
+    const [[, , x], [, , y]] = this.absoluteTransform;
+    return { x: x + 2, y: y + this.fontSize * 0.2, width: this.width - 4, height: this.fontSize * 0.8 };
+  }
+
   clone(): MockNode {
     const c = new MockNode(this.type);
     Object.assign(c, { ...this, children: [], parent: null });
@@ -72,7 +116,20 @@ export class MockNode {
   }
 }
 
+const loadedFonts = new Set<string>();
+function requireLoaded(f: { family: string; style: string }) {
+  if (!loadedFonts.has(`${f.family}/${f.style}`)) throw new Error(`Font not loaded: ${f.family} ${f.style}`);
+}
+
+export const AVAILABLE_FONTS = [
+  { family: 'Inter', style: 'Regular' },
+  { family: 'Inter', style: 'Bold' },
+  { family: 'Arial', style: 'Regular' },
+  { family: 'Oswald', style: 'Bold' },
+];
+
 export function installFigmaMock() {
+  loadedFonts.clear();
   const page = new MockNode('PAGE');
   let hash = 0;
   const figma = {
@@ -88,6 +145,18 @@ export function installFigmaMock() {
       const r = new MockNode('RECTANGLE');
       page.appendChild(r);
       return r;
+    },
+    createText() {
+      const t = new MockNode('TEXT');
+      page.appendChild(t);
+      return t;
+    },
+    async loadFontAsync(f: { family: string; style: string }) {
+      if (!AVAILABLE_FONTS.some((a) => a.family === f.family && a.style === f.style)) throw new Error('not available');
+      loadedFonts.add(`${f.family}/${f.style}`);
+    },
+    async listAvailableFontsAsync() {
+      return AVAILABLE_FONTS.map((fontName) => ({ fontName, fontStyle: fontName.style }));
     },
     createEllipse() {
       const e = new MockNode('ELLIPSE');

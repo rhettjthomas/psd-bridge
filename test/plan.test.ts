@@ -22,6 +22,7 @@ describe('planImport', () => {
       'raster:Grade (clipped)',
       'raster:Vignette (masked)',
       'raster:Glow (unsupported)',
+      'text:Title',
       'raster:Badge (vector mask)',
       'group:Frame (masked group)',
       'raster:Card',
@@ -31,14 +32,25 @@ describe('planImport', () => {
       'vector:Ribbon (path + gradient)',
       'vector:Rule (open path)',
       'raster:Noise (unsupported)',
+      'group:Type',
+      'text:Series title (runs)',
+      'text:Body (box)',
+      'raster:Arched (warped)',
+      'text:Side note (rotated)',
       'raster:Source photo (hidden)',
     ]);
   });
 
-  it('reports text with no pixel bounds as skipped', () => {
-    expect(planImport(doc, DEFAULT_SETTINGS).report).toContainEqual({
-      level: 'skipped', layerName: 'Title', reason: 'Layer has no pixels.',
-    });
+  it('rasterizes text when "Editable text" is off, skipping text with no pixels', () => {
+    const plan = planImport(doc, { ...DEFAULT_SETTINGS, editableText: false });
+    expect(plan.layers.some((l) => l.action === 'text')).toBe(false);
+    expect(plan.layers.find((l) => l.name === 'Arched (warped)')!.action).toBe('raster');
+    expect(plan.report).toContainEqual({ level: 'skipped', layerName: 'Title', reason: 'Layer has no pixels.' });
+  });
+
+  it('reports text approximations only when the text is imported editable', () => {
+    const plan = planImport(doc, DEFAULT_SETTINGS);
+    expect(plan.report).toContainEqual(expect.objectContaining({ layerName: 'Side note (rotated)', reason: expect.stringMatching(/Faux/) }));
   });
 
   it('drops hidden layers when "Import hidden layers" is off', () => {

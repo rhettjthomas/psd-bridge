@@ -116,6 +116,8 @@ export function psdToIR(psd: Psd, fileName: string): ReadResult {
         layer.text = readText(src.text!);
         if (layer.text.warped) {
           report.push({ level: 'approximated', layerName: name, reason: 'Warped or on-path text imported as pixels.' });
+        } else if (layer.text.vertical) {
+          report.push({ level: 'approximated', layerName: name, reason: 'Vertical text imported as pixels.' });
         }
         break;
       case 'shape':
@@ -216,42 +218,75 @@ function toShadow(s: LayerEffectShadow, type: IRShadow['type'], globalAngle: num
 }
 
 function readText(t: LayerTextData): IRText {
-  const scale = transformScale(t.transform);
+  const tf = t.transform ?? [1, 0, 0, 1, 0, 0];
+  const scale = transformScale(tf);
+  const hScale = Math.hypot(tf[0], tf[1]);
+  const rotation = (Math.atan2(tf[1], tf[0]) * 180) / Math.PI;
+  const warnings = new Set<string>();
+  if (Math.abs(hScale - scale) > 1e-3 * scale) warnings.add('Text was scaled unevenly; imported at its vertical scale.');
+
+  // ag-psd already turns paragraph breaks into \n; \u0003 is Photoshop's soft line break.
+  const content = t.text.replace(/\u0003/g, '\u2028');
   const base = t.style ?? {};
   const runs: IRTextRun[] = [];
   let pos = 0;
-  const styleRuns = t.styleRuns?.length ? t.styleRuns : [{ length: t.text.length, style: base }];
+  const styleRuns = t.styleRuns?.length ? t.styleRuns : [{ length: content.length, style: base }];
   for (const r of styleRuns) {
     const st = { ...base, ...r.style };
+    const start = Math.min(content.length, pos);
+    const end = Math.min(content.length, pos + r.length);
+    pos += r.length;
+    if (end <= start) continue;
+    if (st.fauxBold || st.fauxItalic) warnings.add('Faux bold/italic has no Figma equivalent.');
+    if ((st.horizontalScale ?? 1) !== 1 || (st.verticalScale ?? 1) !== 1) warnings.add('Character scaling was not applied.');
+    if (st.baselineShift) warnings.add('Baseline shift was not applied.');
+    if (st.fontBaseline) warnings.add('Superscript/subscript was not applied.');
+    if (st.strokeFlag) warnings.add('Text stroke was not applied.');
     runs.push({
-      start: pos,
-      end: Math.min(t.text.length, pos + r.length),
+      start,
+      end,
       postScriptName: st.font?.name,
       fontSize: st.fontSize !== undefined ? st.fontSize * scale : undefined,
       color: st.fillColor ? toRGBA(st.fillColor) : undefined,
       tracking: st.tracking,
       leading: st.autoLeading === false && st.leading !== undefined ? st.leading * scale : undefined,
+      underline: st.underline || undefined,
+      strikethrough: st.strikethrough || undefined,
+      caps: st.fontCaps === 2 ? 'UPPER' : st.fontCaps === 1 ? 'SMALL_CAPS' : undefined,
     });
-    pos += r.length;
   }
 
-  const just = t.paragraphStyle?.justification ?? t.paragraphStyleRuns?.[0]?.style.justification ?? 'left';
-  const align = just === 'center' ? 'CENTER' : just === 'right' ? 'RIGHT' : just.startsWith('justify') ? 'JUSTIFIED' : 'LEFT';
+  const justs = [t.paragraphStyle?.justification, ...(t.paragraphStyleRuns ?? []).map((r) => r.style.justification)].filter(
+    (j): j is NonNullable<typeof j> => !!j,
+  );
+  const just = t.paragraphStyleRuns?.[0]?.style.justification ?? t.paragraphStyle?.justification ?? 'left';
+  if (new Set(justs.map(alignOf)).size > 1) warnings.add('Mixed paragraph alignment; the first paragraph\'s alignment was used.');
+  const align = alignOf(just);
+
   const kind = t.shapeType === 'box' ? 'box' : 'point';
   const box = t.boxBounds;
+  const apply = (x: number, y: number) => ({ x: tf[0] * x + tf[2] * y + tf[4], y: tf[1] * x + tf[3] * y + tf[5] });
+  const origin = kind === 'box' && box ? apply(box[0], box[1]) : apply(0, 0);
   const warped = (!!t.warp?.style && t.warp.style !== 'none') || !!t.textPath;
 
   return {
-    // Photoshop uses \r for line breaks.
-    content: t.text.replace(/\r/g, '\n'),
+    content,
     kind,
-    boxWidth: kind === 'box' && box ? (box[2] - box[0]) * scale : undefined,
+    boxWidth: kind === 'box' && box ? (box[2] - box[0]) * hScale : undefined,
     boxHeight: kind === 'box' && box ? (box[3] - box[1]) * scale : undefined,
+    origin,
     scale,
+    rotation: Math.abs(rotation) < 0.01 ? 0 : rotation,
     align,
     runs,
     warped,
+    vertical: t.orientation === 'vertical',
+    warnings: [...warnings],
   };
+}
+
+function alignOf(j: string): IRText['align'] {
+  return j === 'center' ? 'CENTER' : j === 'right' ? 'RIGHT' : j.startsWith('justify') ? 'JUSTIFIED' : 'LEFT';
 }
 
 /** Plain-text tree for logs and the inspect CLI. Top layer printed first, like Photoshop. */

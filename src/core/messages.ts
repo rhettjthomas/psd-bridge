@@ -1,7 +1,7 @@
 import type { ImportReport, IRDocument, ReportItem } from './model';
 import type { PlannedLayer } from './plan';
 import type { ImportSettings } from './settings';
-import type { FontMap } from './fonts';
+import type { FamilyStyles, FontMap, FontMatch, FontName } from './fonts';
 
 export type DocInfo = Omit<IRDocument, 'layers'>;
 
@@ -12,7 +12,19 @@ export type UIToMain =
   | { type: 'save-font-map'; fontMap: FontMap }
   /** Log the parsed tree in the main-thread console. */
   | { type: 'debug-tree'; doc: IRDocument }
-  | { type: 'import-begin'; doc: DocInfo; settings: ImportSettings; totalLayers: number; preflight: ReportItem[] }
+  /** Match PostScript names against Figma's fonts and the saved map. */
+  | { type: 'resolve-fonts'; postScriptNames: string[] }
+  | {
+      type: 'import-begin';
+      doc: DocInfo;
+      settings: ImportSettings;
+      totalLayers: number;
+      preflight: ReportItem[];
+      /** Final font for every PostScript name the import uses. */
+      fonts: Record<string, FontName>;
+      /** PostScript names the user skipped (they use the default font and are reported). */
+      skippedFonts: string[];
+    }
   /** Layers in document order (parents before children, siblings bottom-first). */
   | { type: 'layers-batch'; layers: PlannedLayer[] }
   | { type: 'import-end'; report: ReportItem[] }
@@ -21,6 +33,7 @@ export type UIToMain =
 /** Main thread → UI iframe. */
 export type MainToUI =
   | { type: 'init'; settings: ImportSettings; fontMap: FontMap; version: string; licensed: boolean }
+  | { type: 'fonts'; matches: FontMatch[]; families: FamilyStyles[]; fontMap: FontMap }
   | { type: 'batch-ack' }
   | { type: 'progress'; done: number; total: number; label: string }
   | { type: 'report'; report: ImportReport }
