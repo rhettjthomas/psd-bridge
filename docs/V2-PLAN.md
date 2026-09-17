@@ -115,12 +115,11 @@ direction of the mappings they already own, so import and export can't drift apa
 - **S3 — Does the Illustrator route work?** Export a real frame as SVG from Figma, open it in
   Illustrator, run a draft `.jsx`, and confirm the result: layers named, text editable, vectors
   editable, images intact.
-- **Done when:** all three questions are answered in writing, and the plan is adjusted to match.
-
 - **S4 — Can we write a smart object?** Write a PSD with a linked file (`lnk2`) and a placed
   layer (`SoLd`) that points at it, then open it in Photoshop: does it arrive as a real smart
   object whose contents open and re-render? If yes, "Images as smart objects" becomes a real
   option in M3; if no, images stay pixel layers and the report says so. *Not blocking.*
+- **Done when:** all four questions are answered in writing, and the plan is adjusted to match.
 
 ### V2-M1 — Export tab and the Figma reader
 - The disabled **Export** tab becomes real: pick the selected frame (or choose from a list),
