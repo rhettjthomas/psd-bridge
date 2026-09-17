@@ -72,14 +72,12 @@ Everything the intermediate model needs is available in the plugin API:
 | Fills, strokes, effects, blend, opacity, masks, radii | node properties, as in v1's import |
 | SVG for the Illustrator path | `frame.exportAsync({ format: 'SVG_STRING', svgOutlineText: false, svgIdAttribute: true })` |
 
-### 4. The open risk: can the plugin save a file at all?
+### 4. Saving a file works (spike S1, answered 2026-09-17)
 
-Everything above assumes the plugin window can hand the user a file. v1 already hit this:
-**Export font map** appeared to do nothing in Figma, and in a sandboxed test frame downloads
-were blocked silently. Plenty of Figma export plugins do download files this way, so Figma
-itself may allow it and v1's problem may have been only the hidden status message. This has to
-be settled before building an exporter, because a PSD can't be pasted as text the way a font map
-can. See spike S1.
+Everything above assumes the plugin window can hand the user a file. **It can:** Download in
+v1's Font map window produced a `.json` file in Figma desktop. So v1's original problem was only
+the hidden status message, which is fixed, and `<a download>` from the plugin iframe is a sound
+way to deliver an exported PSD or SVG.
 
 ## Architecture
 
@@ -106,18 +104,19 @@ direction of the mappings they already own, so import and export can't drift apa
 ## Milestones
 
 ### V2-M0 — Spikes (do these before writing the exporter)
-- **S1 — Can we save a file?** Add a tiny "Export test" that writes a small PSD and offers it as
-  a download inside real Figma. If downloads are blocked, find the workaround other export
-  plugins use before going further. *Blocking.*
-- **S2 — Does Photoshop accept our layers?** Write a PSD by hand with a pixel layer, a group, a
-  shape layer, a text layer, a layer mask, and a drop shadow. Open it in Photoshop and check
-  which parts are truly editable. *Blocking for the editable path; the raster path is unaffected.*
-- **S3 — Does the Illustrator route work?** Export a real frame as SVG from Figma, open it in
-  Illustrator, run a draft `.jsx`, and confirm the result: layers named, text editable, vectors
-  editable, images intact.
-- **S4 — Can we write a smart object?** Write a PSD with a linked file (`lnk2`) and a placed
-  layer (`SoLd`) that points at it, then open it in Photoshop: does it arrive as a real smart
-  object whose contents open and re-render? If yes, "Images as smart objects" becomes a real
+- ✅ **S1 — Can we save a file?** Yes. Downloading from the plugin window works in Figma desktop
+  (confirmed with v1's Font map → Download).
+- **S2 — Does Photoshop accept our layers?** `scripts/spikes/write-test-psd.mjs` writes
+  `spike-a-layers.psd`: a pixel layer, a group, a shape with vector data only, a shape with
+  vector data *and* pixels, a text layer, a layer mask, and a drop shadow. Open it in Photoshop
+  and record what is editable. *Blocking for the editable path; the raster path is unaffected.*
+- **S3 — Does the Illustrator route work?** Export a real frame as SVG from Figma (with
+  "Include “id” attribute" on and "Outline text" off), open it in Illustrator, run
+  `scripts/illustrator/svg-to-ai.jsx`, and confirm: layers named, text editable, vectors
+  editable, images intact, and a saved `.ai`.
+- **S4 — Can we write a smart object?** `spike-b-smart.psd` (same script) embeds a PNG as a
+  linked file with a placed layer pointing at it. Open it in Photoshop: does it arrive as a real
+  smart object whose contents open and re-render? If yes, "Images as smart objects" becomes a real
   option in M3; if no, images stay pixel layers and the report says so. *Not blocking.*
 - **Done when:** all four questions are answered in writing, and the plan is adjusted to match.
 
