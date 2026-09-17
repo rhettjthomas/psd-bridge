@@ -28,6 +28,7 @@ export class Importer {
   private readonly report: ReportItem[];
   /** Layer ids that produced a node (used to validate clipping bases). */
   private readonly placed = new Set<number>();
+  private readonly artboards = new Set<SceneNode>();
   private imported = 0;
   done = 0;
 
@@ -204,6 +205,11 @@ export class Importer {
         continue;
       }
 
+      if (layer.artboard) {
+        this.finishArtboard(frame, layer);
+        continue;
+      }
+
       const baseId = layer.children?.[0];
       if (layer.action === 'clip' && (baseId === undefined || !this.placed.has(baseId))) {
         this.approximate(layer.name, 'Clipping base could not be placed; clipped layers imported unclipped.');
@@ -230,9 +236,52 @@ export class Importer {
       if (layer.action === 'group') this.imported++;
     }
 
+    this.unwrapSingleArtboard();
     figma.currentPage.selection = [this.frame];
     figma.viewport.scrollAndZoomIntoView([this.frame]);
     return { imported: this.imported, items: [...this.report, ...uiReport] };
+  }
+
+  /**
+   * An artboard keeps its placeholder frame: sized and placed at the artboard's rect,
+   * filled with its background, clipped, and with children shifted into its space.
+   */
+  private finishArtboard(frame: FrameNode, layer: PlannedLayer) {
+    const { bounds, background } = layer.artboard!;
+    for (const child of frame.children) {
+      child.x -= bounds.left;
+      child.y -= bounds.top;
+    }
+    frame.resize(Math.max(0.01, bounds.width), Math.max(0.01, bounds.height));
+    frame.x = bounds.left;
+    frame.y = bounds.top;
+    frame.fills = background ? [solid(background)] : [];
+    frame.clipsContent = true;
+    frame.visible = layer.visible;
+    frame.opacity = layer.opacity;
+    if (layer.blendMode !== 'PASS_THROUGH') frame.blendMode = layer.blendMode;
+    this.artboards.add(frame);
+    this.imported++;
+  }
+
+  /**
+   * A PSD with one artboard and nothing else becomes a single frame: the import frame
+   * takes the artboard's size and background instead of wrapping it.
+   */
+  private unwrapSingleArtboard() {
+    const kids = this.frame.children;
+    if (kids.length !== 1 || kids[0].type !== 'FRAME' || !this.artboards.has(kids[0])) return;
+    const board = kids[0];
+    if (!board.visible || board.opacity !== 1 || board.blendMode !== 'PASS_THROUGH') return;
+    this.frame.resize(board.width, board.height);
+    this.frame.fills = board.fills;
+    for (const child of [...board.children]) {
+      const { x, y } = child;
+      this.frame.appendChild(child);
+      child.x = x;
+      child.y = y;
+    }
+    board.remove();
   }
 
   /** Removes a partially built import after a fatal error. */
@@ -286,6 +335,10 @@ export function placeVectorPaths(node: VectorNode, vec: IRVector) {
 function firstPoint(data: string): [number, number] | null {
   const m = /M\s*(-?[\d.e+-]+)[\s,]+(-?[\d.e+-]+)/.exec(data);
   return m ? [Number(m[1]), Number(m[2])] : null;
+}
+
+function solid(c: { r: number; g: number; b: number; a: number }): SolidPaint {
+  return { type: 'SOLID', color: { r: c.r, g: c.g, b: c.b }, opacity: c.a };
 }
 
 function toEffect(s: IRShadow): Effect {

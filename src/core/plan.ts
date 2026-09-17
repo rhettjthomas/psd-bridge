@@ -102,12 +102,12 @@ export function planImport(doc: IRDocument, settings: ImportSettings): ImportPla
     if (hidden && !settings.importHidden) return;
 
     if (l.kind === 'group') {
-      const mustKeep = keepGroup || !!l.mask || !!l.vectorMask;
+      const mustKeep = keepGroup || !!l.mask || !!l.vectorMask || !!l.artboard;
       if (settings.flattenGroups && !mustKeep) {
         walk(l.children ?? [], parentId, hidden);
       } else {
         if (settings.flattenGroups) {
-          report.push({ level: 'approximated', layerName: l.name, reason: 'Group kept while flattening because it is masked or is a clipping base.' });
+          report.push({ level: 'approximated', layerName: l.name, reason: 'Group kept while flattening because it is masked, an artboard, or a clipping base.' });
         }
         layers.push({ ...l, action: 'group', parentId });
         walk(l.children ?? [], l.id, hidden);

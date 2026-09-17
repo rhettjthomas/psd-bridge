@@ -148,12 +148,20 @@ export interface IRLayer {
   vectorMask?: IRVector;
   shadows: IRShadow[];
   text?: IRText;
+  /** Photoshop artboard (a top-level group with its own canvas and background). */
+  artboard?: IRArtboard;
   /** Shape geometry and paints (shape and fill layers). */
   shape?: IRShape;
   /** Names of layer styles present but not translatable (bevel, glow, …). */
   unsupportedEffects: string[];
   /** Child ids in stacking order: first = bottom (same as PSD and Figma appendChild). */
   children?: number[];
+}
+
+export interface IRArtboard {
+  bounds: Bounds;
+  /** Background fill; null = transparent. */
+  background: RGBA | null;
 }
 
 export interface IRDocument {

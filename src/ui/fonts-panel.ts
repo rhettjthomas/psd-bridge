@@ -13,6 +13,7 @@ import {
   type FontName,
   type FontUsage,
 } from '../core/fonts';
+import { attachCombobox } from './combobox';
 
 interface Choice {
   font?: FontName;
@@ -155,17 +156,6 @@ export class FontsPanel {
     const missing = this.missing;
     root.hidden = !this.enabled || missing.length === 0;
 
-    const list = root.querySelector<HTMLDataListElement>('#family-list')!;
-    if (list.childElementCount !== this.families.size) {
-      list.replaceChildren(
-        ...[...this.families.keys()].map((f) => {
-          const o = document.createElement('option');
-          o.value = f;
-          return o;
-        }),
-      );
-    }
-
     root.querySelector('#fonts-count')!.textContent = `${missing.length} missing`;
     root.querySelector('#font-rows')!.replaceChildren(...missing.map((m) => this.row(m)));
     this.opts.onChange();
@@ -181,8 +171,8 @@ export class FontsPanel {
     row.innerHTML = `
       <div class="font-ps"><strong></strong><span class="muted"></span></div>
       <div class="font-pick">
-        <input class="family" list="family-list" placeholder="Replacement family" spellcheck="false" />
-        <select class="style"></select>
+        <div class="combo"><input class="family" placeholder="Search installed fonts" spellcheck="false" /></div>
+        <div class="select"><select class="style" aria-label="Style"></select></div>
       </div>
       <div class="font-preview"></div>
       <div class="font-opts">
@@ -199,6 +189,7 @@ export class FontsPanel {
     const skip = row.querySelector<HTMLButtonElement>('.skip')!;
 
     family.value = choice.font?.family ?? '';
+    family.setAttribute('aria-label', `Replacement for ${ps}`);
     remember.checked = choice.remember;
     skip.textContent = choice.skip ? 'Undo skip' : 'Skip';
     family.disabled = style.disabled = remember.disabled = choice.skip;
@@ -232,9 +223,13 @@ export class FontsPanel {
       this.opts.onChange();
     };
 
-    family.addEventListener('input', () => {
-      fillStyles();
-      commit();
+    attachCombobox({
+      input: family,
+      options: () => [...this.families.keys()],
+      onChange: () => {
+        fillStyles();
+        commit();
+      },
     });
     style.addEventListener('change', commit);
     remember.addEventListener('change', () => {

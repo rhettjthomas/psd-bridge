@@ -48,6 +48,7 @@ src/core/color.ts        ag-psd colors → RGBA
 src/main/paints.ts       Paints and strokes applied to Figma nodes
 src/main/text.ts         Font loading and editable text nodes (with glyph-bounds alignment)
 src/ui/fonts-panel.ts    The font matching window
+src/ui/combobox.ts       Searchable, themed dropdown (font families)
 src/main/importer.ts     Builds frames, groups, and image fills (main thread)
 src/ui/encode.ts         Pixel data → PNG, with downscaling
 src/ui/ui.html|css|ts    Plugin window; runs ag-psd with the browser canvas
@@ -181,6 +182,14 @@ From the brief:
   as auto-width and box text as fixed-width, alignment, and style runs.
 - Warped text and text on a path import as pixels and are reported.
 - **Done when:** text lands within 2 px of its position, and saved matches reapply.
+
+### Artboards (added after M5 testing)
+- An artboard group becomes a clipped Figma frame at the artboard's position, filled with its
+  background (white, black, transparent, or a custom color). Its children are placed relative
+  to the artboard.
+- A PSD that contains one artboard and nothing else is merged into the import frame, so there
+  is no frame-in-frame.
+- Artboards are kept when flattening groups.
 
 ### M6 — Polish
 - Reference-style UI, progress bar, report panel with layer names, and settings menu.

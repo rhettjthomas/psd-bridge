@@ -2,7 +2,7 @@
  * ag-psd `Psd` → IR. Runs in the UI iframe (ag-psd needs the browser canvas).
  * Only reads data; pixel encoding happens separately so this stays unit-testable.
  */
-import type { Layer, LayerEffectShadow, LayerTextData, Psd } from 'ag-psd';
+import type { Color, Layer, LayerEffectShadow, LayerTextData, Psd } from 'ag-psd';
 import { mapBlendMode } from './blend';
 import { toRGBA } from './color';
 import { convertPaths } from './paths';
@@ -101,6 +101,14 @@ export function psdToIR(psd: Psd, fileName: string): ReadResult {
       }
     }
 
+    if (src.artboard && kind === 'group') {
+      const r = src.artboard.rect;
+      layer.artboard = {
+        bounds: edgesToBounds(r.left, r.top, r.right, r.bottom),
+        background: artboardBackground(src.artboard.backgroundType, src.artboard.color),
+      };
+    }
+
     switch (kind) {
       case 'group':
         layer.children = (src.children ?? []).map((c) => visit(c, id));
@@ -180,6 +188,24 @@ function readMasks(src: Layer, layer: IRLayer, psd: Psd, report: ReportItem[]) {
       layer.vectorMask = vec;
       if (vec.warning) report.push({ level: 'approximated', layerName: layer.name, reason: `Vector mask: ${vec.warning}` });
     }
+  }
+}
+
+// Photoshop artboardBackgroundType values.
+const ARTBOARD_WHITE = 1;
+const ARTBOARD_BLACK = 2;
+const ARTBOARD_TRANSPARENT = 3;
+
+export function artboardBackground(type: number | undefined, color: Color | undefined): RGBA | null {
+  switch (type ?? ARTBOARD_WHITE) {
+    case ARTBOARD_WHITE:
+      return { r: 1, g: 1, b: 1, a: 1 };
+    case ARTBOARD_BLACK:
+      return { r: 0, g: 0, b: 0, a: 1 };
+    case ARTBOARD_TRANSPARENT:
+      return null;
+    default:
+      return color ? toRGBA(color) : { r: 1, g: 1, b: 1, a: 1 };
   }
 }
 
@@ -296,6 +322,7 @@ export function formatTree(doc: IRDocument): string {
     for (const id of [...ids].reverse()) {
       const l = doc.layers[id];
       const flags = [
+        l.artboard ? 'artboard' : '',
         l.visible ? '' : 'hidden',
         l.opacity < 1 ? `${Math.round(l.opacity * 100)}%` : '',
         l.blendMode !== 'NORMAL' && l.blendMode !== 'PASS_THROUGH' ? l.blendMode.toLowerCase() : '',

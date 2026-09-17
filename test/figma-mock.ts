@@ -30,7 +30,7 @@ export class MockNode {
   maskType = 'ALPHA';
   private paths: { windingRule: string; data: string }[] = [];
   constructor(readonly type: string) {
-    this.blendMode = type === 'GROUP' ? 'PASS_THROUGH' : 'NORMAL';
+    this.blendMode = type === 'GROUP' || type === 'FRAME' ? 'PASS_THROUGH' : 'NORMAL';
   }
   appendChild(n: AnyNode) {
     this.insertChild(this.children.length, n);
