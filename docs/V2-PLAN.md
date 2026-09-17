@@ -33,9 +33,15 @@ Known limits when writing (from the README):
   be writable as a linked file (the image bytes, with a GUID id) plus a placed layer that points
   at it and carries a transform. Unproven in Photoshop; see spike S4.
 
-**Unverified:** whether Photoshop opens ag-psd's *shape* layers as real, editable shape layers.
-Writing them round-trips through ag-psd (v1's test fixture does exactly this), but a round trip
-isn't proof that Photoshop accepts them. Spike S2 settles it.
+**Verified (S2/S4, 2026-09-17, Rhett in Photoshop):** shape layers arrive as real, editable
+Shape layers, both with and without supplied pixels. Smart objects work: an embedded linked file
+opens and re-renders. Text layers trigger the expected "update text layers" prompt and then open
+fine.
+
+One catch from S2: Photoshop draws the **path**, not the live-shape radii. The test shape carried
+`keyOriginRRectRadii` but a square path, and it came in square until the radius was nudged in the
+Properties panel. So the exporter writes the true rounded path *and* the live-shape metadata.
+Figma's `fillGeometry` already contains rounded corners, so this falls out of the normal path.
 
 ### 2. There is no way to write a real .ai file
 
@@ -106,26 +112,30 @@ direction of the mappings they already own, so import and export can't drift apa
 ### V2-M0 — Spikes (do these before writing the exporter)
 - ✅ **S1 — Can we save a file?** Yes. Downloading from the plugin window works in Figma desktop
   (confirmed with v1's Font map → Download).
-- **S2 — Does Photoshop accept our layers?** `scripts/spikes/write-test-psd.mjs` writes
-  `spike-a-layers.psd`: a pixel layer, a group, a shape with vector data only, a shape with
-  vector data *and* pixels, a text layer, a layer mask, and a drop shadow. Open it in Photoshop
-  and record what is editable. *Blocking for the editable path; the raster path is unaffected.*
+- ✅ **S2 — Does Photoshop accept our layers?** Yes: shapes are editable Shape layers, masks and
+  groups work, text opens after the "Update" prompt. Radii must be baked into the path.
+  `scripts/spikes/write-test-psd.mjs` writes
+  `spike-a-layers.psd` (a pixel layer, a group, a shape with vector data only, a shape with
+  vector data *and* pixels, a text layer, a layer mask, and a drop shadow).
 - **S3 — Does the Illustrator route work?** Export a real frame as SVG from Figma (with
   "Include “id” attribute" on and "Outline text" off), open it in Illustrator, run
   `scripts/illustrator/svg-to-ai.jsx`, and confirm: layers named, text editable, vectors
   editable, images intact, and a saved `.ai`.
-- **S4 — Can we write a smart object?** `spike-b-smart.psd` (same script) embeds a PNG as a
-  linked file with a placed layer pointing at it. Open it in Photoshop: does it arrive as a real
-  smart object whose contents open and re-render? If yes, "Images as smart objects" becomes a real
-  option in M3; if no, images stay pixel layers and the report says so. *Not blocking.*
+- ✅ **S4 — Can we write a smart object?** Yes, confirmed in Photoshop. "Images as smart objects"
+  becomes a real export option in M3. (`spike-b-smart.psd` embeds a PNG as a linked file with a
+  placed layer pointing at it.)
 - **Done when:** all four questions are answered in writing, and the plan is adjusted to match.
 
-### V2-M1 — Export tab and the Figma reader
-- The disabled **Export** tab becomes real: pick the selected frame (or choose from a list),
-  show its name and size, options, and one action button.
-- `figma-reader` walks the frame into IR: groups, visibility, opacity, blend modes, masks,
-  geometry, text, effects, and images.
-- **Done when:** selecting a frame prints an IR tree that matches Figma's layers panel.
+### V2-M1 — Export tab and the Figma reader ✅ (built; needs a check in Figma)
+- The **Export** tab is live: it lists the selected frame first, then the page's top-level
+  frames, updates as the canvas selection changes, and shows size and layer count.
+- `src/main/figma-reader.ts` walks a frame into the layer model: groups, visibility, opacity,
+  blend modes, geometry (`fillGeometry`, with corner radii and smoothing already baked in),
+  text runs, and drop/inner shadows. Everything is measured from the frame's top-left corner.
+- Figma masks become "clipped" layers, which is how Photoshop expresses the same thing.
+- Reported: layer types Photoshop has no equivalent for (blurs, and so on), non-alpha masks,
+  pixel letter spacing, and vertical text alignment.
+- **Done when:** selecting a frame prints a layer tree that matches Figma's layers panel.
 
 ### V2-M2 — PSD export, raster path
 - Every layer exports as a pixel layer at its position, inside groups, with opacity, blend mode,
@@ -141,7 +151,8 @@ direction of the mappings they already own, so import and export can't drift apa
 - **Masks and clipping:** Figma masks → PSD layer masks or clipping groups.
 - **Effects:** drop and inner shadows → PSD layer effects.
 - Options: **Rasterize on export**, **Ignore corner smoothing**, and **Images as smart objects**
-  (real if spike S4 passes, otherwise reported as unsupported).
+  (real: spike S4 passed).
+- Corner radii are written as path geometry, not just live-shape metadata (spike S2).
 - **Done when:** text and shapes are editable in Photoshop, or the report says why not.
 
 ### V2-M4 — Illustrator export
@@ -162,7 +173,7 @@ direction of the mappings they already own, so import and export can't drift apa
 - [ ] The same frame exports to SVG, and after the converter script it is a layered .ai with
       editable text and vectors
 - [ ] A PSD imported by v1 and exported again still matches the original
-- [ ] If spike S4 passes: images export as smart objects that open and re-render in Photoshop
+- [ ] Images export as smart objects that open and re-render in Photoshop
 
 ## Decisions made (2026-09-17)
 1. **The AI route:** SVG plus an Illustrator converter script.

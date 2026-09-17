@@ -13,6 +13,7 @@ import {
 } from 'ag-psd';
 import { BATCH_BYTE_LIMIT, LAYER_BATCH_SIZE, type MainToUI, type UIToMain } from '../core/messages';
 import type { ImportReport, IRDocument, ReportItem } from '../core/model';
+import type { FrameInfo } from '../core/messages';
 import { planImport, type PlannedLayer } from '../core/plan';
 import { formatTree, psdToIR } from '../core/psd-reader';
 import { DEFAULT_SETTINGS, type ImportSettings } from '../core/settings';
@@ -470,6 +471,71 @@ function formatBytes(n: number): string {
   return `${(n / (1024 * 1024)).toFixed(1)} MB`;
 }
 
+// ---------- Export tab ----------
+
+let frames: FrameInfo[] = [];
+
+function renderFrames(selectedId: string | null) {
+  const select = $<HTMLSelectElement>('frame-select');
+  const previous = select.value;
+  select.replaceChildren(
+    ...frames.map((f) => {
+      const o = document.createElement('option');
+      o.value = f.id;
+      o.textContent = f.name;
+      return o;
+    }),
+  );
+  const wanted = selectedId ?? previous;
+  if (wanted && frames.some((f) => f.id === wanted)) select.value = wanted;
+  renderFrameMeta();
+}
+
+function renderFrameMeta() {
+  const frame = currentFrame();
+  $('frame-meta').textContent = frame
+    ? `${frame.width} × ${frame.height} px · ${frame.layerCount} layers`
+    : 'No frames on this page. Select a frame on the canvas, then click Refresh.';
+  $<HTMLButtonElement>('export-btn').disabled = !frame;
+}
+
+function currentFrame(): FrameInfo | undefined {
+  const id = $<HTMLSelectElement>('frame-select').value;
+  return frames.find((f) => f.id === id);
+}
+
+function renderExportPreview(doc: IRDocument, report: ReportItem[]) {
+  const kinds = new Map<string, number>();
+  for (const l of doc.layers) kinds.set(l.kind, (kinds.get(l.kind) ?? 0) + 1);
+  $('export-report').hidden = false;
+  $('export-counts').textContent = [`${doc.layers.length} layers`, ...[...kinds].map(([k, n]) => `${n} ${k}`)].join(' · ');
+  $('export-groups').replaceChildren(
+    ...report.map((item) => {
+      const div = document.createElement('div');
+      div.className = 'item';
+      const name = document.createElement('span');
+      name.className = 'item-name';
+      name.textContent = item.layerName;
+      const reason = document.createElement('span');
+      reason.className = 'item-reason';
+      reason.textContent = item.reason;
+      div.append(name, reason);
+      return div;
+    }),
+  );
+}
+
+function showTab(tab: 'import' | 'export') {
+  for (const name of ['import', 'export'] as const) {
+    const active = name === tab;
+    $(`panel-${name}`).hidden = !active;
+    $(`tab-${name}`).classList.toggle('active', active);
+    $(`tab-${name}`).setAttribute('aria-selected', String(active));
+    $(`${name}-btn`).hidden = !active;
+  }
+  $('notices').hidden = true;
+}
+
 // ---------- Wiring ----------
 
 window.onmessage = (event: MessageEvent) => {
@@ -498,6 +564,13 @@ window.onmessage = (event: MessageEvent) => {
       break;
     case 'report':
       onReport(msg.report);
+      break;
+    case 'frames':
+      frames = msg.frames;
+      renderFrames(msg.selectedId);
+      break;
+    case 'frame-read':
+      renderExportPreview(msg.doc, msg.report);
       break;
     case 'error':
       ackWaiter?.reject(new Error(msg.message));
@@ -534,6 +607,18 @@ $('cancel-btn').addEventListener('click', () => {
   cancelRequested = true;
   $<HTMLButtonElement>('cancel-btn').disabled = true;
   setStatus('Canceling…', 0);
+});
+
+$('tab-import').addEventListener('click', () => showTab('import'));
+$('tab-export').addEventListener('click', () => showTab('export'));
+$('refresh-frames').addEventListener('click', () => post({ type: 'refresh-frames' }));
+$('frame-select').addEventListener('change', () => {
+  $('export-report').hidden = true;
+  renderFrameMeta();
+});
+$('export-btn').addEventListener('click', () => {
+  const frame = currentFrame();
+  if (frame) post({ type: 'read-frame', nodeId: frame.id });
 });
 
 $('prep-guide').addEventListener('click', () => post({ type: 'open-prep-guide' }));

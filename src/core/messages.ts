@@ -32,7 +32,11 @@ export type UIToMain =
   /** Select and zoom to a node from the report. */
   | { type: 'select-node'; nodeId: string }
   /** Open the PSD prep guide in the browser. */
-  | { type: 'open-prep-guide' };
+  | { type: 'open-prep-guide' }
+  /** Export tab: re-read what's selected on the canvas. */
+  | { type: 'refresh-frames' }
+  /** Export tab: walk a frame into the layer model. */
+  | { type: 'read-frame'; nodeId: string };
 
 export const PREP_GUIDE_URL = 'https://github.com/rhettjthomas/psd-bridge/blob/main/docs/PSD-PREP.md';
 
@@ -43,9 +47,23 @@ export type MainToUI =
   | { type: 'batch-ack' }
   | { type: 'progress'; done: number; total: number; label: string }
   | { type: 'report'; report: ImportReport }
-  | { type: 'error'; message: string };
+  | { type: 'error'; message: string }
+  /** Frames available to export (selection first, then the page's top-level frames). */
+  | { type: 'frames'; frames: FrameInfo[]; selectedId: string | null }
+  /** The layer model read from a frame, for the export preview. */
+  | { type: 'frame-read'; doc: IRDocument; report: ReportItem[] };
 
 /** Max layers per postMessage batch; keeps the window responsive on large PSDs. */
 export const LAYER_BATCH_SIZE = 20;
 /** Max PNG bytes per batch, so a few huge layers don't pile up in memory. */
 export const BATCH_BYTE_LIMIT = 48 * 1024 * 1024;
+
+/** A frame that can be exported. */
+export interface FrameInfo {
+  id: string;
+  name: string;
+  width: number;
+  height: number;
+  /** Layers inside it, for a rough size warning before reading. */
+  layerCount: number;
+}

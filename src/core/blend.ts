@@ -37,3 +37,11 @@ export function mapBlendMode(psdMode: string | undefined, isGroup: boolean): Ble
   if (mode === 'PASS_THROUGH' && !isGroup) return { mode: 'NORMAL', fallback: false };
   return { mode, fallback: false };
 }
+
+const REVERSE_BLEND = Object.fromEntries(Object.entries(BLEND_MAP).map(([psd, figma]) => [figma, psd])) as Record<IRBlendMode, string>;
+
+/** Figma blend mode → the PSD (ag-psd) name. Unknown modes fall back to normal. */
+export function toPsdBlendMode(mode: string | undefined, isGroup: boolean): string {
+  if (!mode) return isGroup ? 'pass through' : 'normal';
+  return REVERSE_BLEND[mode as IRBlendMode] ?? 'normal';
+}
