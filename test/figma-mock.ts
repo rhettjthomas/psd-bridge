@@ -3,7 +3,10 @@ import { translatePathData } from '../src/core/paths';
 /** Minimal in-memory stand-in for the Figma plugin API, enough for the importer. */
 type AnyNode = MockNode;
 
+let nextNodeId = 1;
+
 export class MockNode {
+  readonly id = `mock:${nextNodeId++}`;
   children: AnyNode[] = [];
   parent: AnyNode | null = null;
   removed = false;
@@ -104,7 +107,7 @@ export class MockNode {
 
   clone(): MockNode {
     const c = new MockNode(this.type);
-    Object.assign(c, { ...this, children: [], parent: null });
+    Object.assign(c, { ...this, id: c.id, children: [], parent: null });
     for (const ch of this.children) c.appendChild(ch.clone());
     this.parent?.insertChild(this.parent.children.indexOf(this) + 1, c);
     return c;

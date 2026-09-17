@@ -81,6 +81,16 @@ describe('Importer', () => {
     expect(result.items).toContainEqual(expect.objectContaining({ layerName: 'Background', level: 'approximated' }));
   });
 
+  it('links report items to the nodes they describe', async () => {
+    const { frame, result } = await runImport();
+    const glow = result.items.find((i) => i.layerName === 'Glow (unsupported)')!;
+    const hero = frame.children.find((c) => c.name === 'Hero')!;
+    const glowNode = hero.children.find((c) => c.name === 'Glow (unsupported)')! as unknown as { id: string };
+    expect(glow.nodeId).toBe(glowNode.id);
+    // Document-level items point at the import frame; unplaced layers have no link.
+    expect(result.items.find((i) => i.layerName === 'Curves')!.nodeId).toBeUndefined();
+  });
+
   it('builds editable shapes with radii, paints, and strokes', async () => {
     const { frame } = await runImport();
     const shapes = frame.children.find((c) => c.name === 'Shapes')!.children;

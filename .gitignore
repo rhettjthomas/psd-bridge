@@ -4,4 +4,5 @@ dist/
 *.log
 # Real client PSDs stay local; only the generated fixture is committed.
 *.psd
+*.psb
 !test/fixtures/sample.psd

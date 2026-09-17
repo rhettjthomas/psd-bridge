@@ -2,7 +2,7 @@
  * Main thread. Owns the Figma document: settings storage, font matching and loading,
  * and node building. Never touches PSD bytes or canvas; the UI iframe does that.
  */
-import type { MainToUI, UIToMain } from './core/messages';
+import { PREP_GUIDE_URL, type MainToUI, type UIToMain } from './core/messages';
 import { formatTree } from './core/psd-reader';
 import { FONT_MAP_KEY, normalizeSettings, SETTINGS_KEY } from './core/settings';
 import { buildFontIndex, groupFamilies, matchFont, type FontMap } from './core/fonts';
@@ -12,7 +12,7 @@ import { loadFonts } from './main/text';
 
 declare const __VERSION__: string;
 
-figma.showUI(__html__, { width: 340, height: 520, themeColors: true, title: 'PSD Bridge' });
+figma.showUI(__html__, { width: 340, height: 480, themeColors: true, title: 'PSD Bridge' });
 
 let importer: Importer | null = null;
 
@@ -46,6 +46,19 @@ async function resolveFonts(postScriptNames: string[]) {
     families: groupFamilies(available),
     fontMap,
   });
+}
+
+async function selectNode(id: string) {
+  const node = await figma.getNodeByIdAsync(id);
+  if (!node || node.removed || node.type === 'DOCUMENT' || node.type === 'PAGE') {
+    figma.notify('That layer is no longer in the file.');
+    return;
+  }
+  let page: BaseNode | null = node;
+  while (page && page.type !== 'PAGE') page = page.parent;
+  if (page && page !== figma.currentPage) await figma.setCurrentPageAsync(page as PageNode);
+  figma.currentPage.selection = [node as SceneNode];
+  figma.viewport.scrollAndZoomIntoView([node as SceneNode]);
 }
 
 async function handle(msg: UIToMain) {
@@ -94,6 +107,12 @@ async function handle(msg: UIToMain) {
     case 'import-abort':
       importer?.abort();
       importer = null;
+      break;
+    case 'select-node':
+      await selectNode(msg.nodeId);
+      break;
+    case 'open-prep-guide':
+      figma.openExternal(PREP_GUIDE_URL);
       break;
   }
 }

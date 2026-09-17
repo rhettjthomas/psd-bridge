@@ -95,9 +95,11 @@ export function attachCombobox({ input, options, onChange }: ComboboxOptions) {
   });
   input.addEventListener('blur', () => close());
   input.addEventListener('input', () => {
-    open();
-    active = items.length ? 0 : -1;
-    render();
+    if (document.activeElement === input) {
+      open();
+      active = items.length ? 0 : -1;
+      render();
+    }
     onChange(options().includes(input.value) ? input.value : '');
   });
   input.addEventListener('keydown', (e) => {

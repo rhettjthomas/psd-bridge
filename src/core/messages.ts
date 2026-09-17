@@ -28,7 +28,13 @@ export type UIToMain =
   /** Layers in document order (parents before children, siblings bottom-first). */
   | { type: 'layers-batch'; layers: PlannedLayer[] }
   | { type: 'import-end'; report: ReportItem[] }
-  | { type: 'import-abort'; message: string };
+  | { type: 'import-abort'; message: string }
+  /** Select and zoom to a node from the report. */
+  | { type: 'select-node'; nodeId: string }
+  /** Open the PSD prep guide in the browser. */
+  | { type: 'open-prep-guide' };
+
+export const PREP_GUIDE_URL = 'https://github.com/rhettjthomas/psd-bridge/blob/main/docs/PSD-PREP.md';
 
 /** Main thread → UI iframe. */
 export type MainToUI =

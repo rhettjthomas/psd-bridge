@@ -11,9 +11,19 @@
     <span class="brand-name">PSD Bridge</span>
     <span class="version" id="version"></span>
   </div>
-  <button class="icon-btn" id="settings-btn" title="Settings" aria-label="Settings">
+  <button class="icon-btn" id="settings-btn" title="Settings" aria-label="Settings" aria-haspopup="menu" aria-expanded="false">
     <svg width="16" height="16" viewBox="0 0 16 16" aria-hidden="true"><path fill="currentColor" d="M8 5.5a2.5 2.5 0 1 0 0 5 2.5 2.5 0 0 0 0-5Zm0 4a1.5 1.5 0 1 1 0-3 1.5 1.5 0 0 1 0 3Zm5.4-2.6-.9-.3-.2-.6.4-.8a.6.6 0 0 0-.1-.7l-.8-.8a.6.6 0 0 0-.7-.1l-.8.4-.6-.2-.3-.9A.6.6 0 0 0 8.8 2H7.2a.6.6 0 0 0-.6.4l-.3.9-.6.2-.8-.4a.6.6 0 0 0-.7.1l-.8.8a.6.6 0 0 0-.1.7l.4.8-.2.6-.9.3a.6.6 0 0 0-.4.6v1.6c0 .3.2.5.4.6l.9.3.2.6-.4.8a.6.6 0 0 0 .1.7l.8.8c.2.2.5.2.7.1l.8-.4.6.2.3.9c.1.2.3.4.6.4h1.6c.3 0 .5-.2.6-.4l.3-.9.6-.2.8.4c.2.1.5.1.7-.1l.8-.8a.6.6 0 0 0 .1-.7l-.4-.8.2-.6.9-.3c.2-.1.4-.3.4-.6V7.5a.6.6 0 0 0-.4-.6Zm-.6 1.7-1.1.4-.5 1.2.5 1-.5.5-1-.5-1.2.5-.4 1.1h-.8l-.4-1.1-1.2-.5-1 .5-.5-.5.5-1-.5-1.2-1.1-.4v-.8l1.1-.4.5-1.2-.5-1 .5-.5 1 .5 1.2-.5.4-1.1h.8l.4 1.1 1.2.5 1-.5.5.5-.5 1 .5 1.2 1.1.4v.8Z"/></svg>
   </button>
+  <div class="menu" id="settings-menu" role="menu" hidden>
+    <button role="menuitem" data-action="reset">Reset import options</button>
+    <div class="menu-sep" role="separator"></div>
+    <button role="menuitem" data-action="export-map">Export font map…</button>
+    <button role="menuitem" data-action="copy-map">Copy font map</button>
+    <button role="menuitem" data-action="import-map">Import font map…</button>
+    <button role="menuitem" data-action="clear-map">Clear saved font matches</button>
+    <div class="menu-sep" role="separator"></div>
+    <div class="menu-note" id="menu-about"></div>
+  </div>
 </header>
 
 <nav class="tabs" role="tablist">
@@ -23,10 +33,11 @@
 
 <main class="content">
   <label class="dropzone" id="dropzone">
-    <input type="file" id="file-input" accept=".psd,image/vnd.adobe.photoshop" hidden />
+    <input type="file" id="file-input" accept=".psd,.psb,image/vnd.adobe.photoshop" hidden />
     <div class="dropzone-empty" id="dropzone-empty">
+      <svg class="dropzone-icon" width="24" height="24" viewBox="0 0 24 24" aria-hidden="true"><path fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" d="M12 15V4m0 0L8 8m4-4 4 4M5 14v4a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2v-4"/></svg>
       <strong>Choose PSD</strong>
-      <span class="muted">or drop a .psd file here</span>
+      <span class="muted">or drop a .psd or .psb file here</span>
     </div>
     <div class="dropzone-file" id="dropzone-file" hidden>
       <strong class="file-name" id="file-name"></strong>
@@ -60,8 +71,11 @@
   <section class="report" id="report" hidden>
     <div class="report-head">
       <strong id="report-title">Report</strong>
-      <span class="report-counts" id="report-counts"></span>
+      <button type="button" class="link" id="copy-report">Copy</button>
     </div>
+    <div class="report-counts" id="report-counts"></div>
+    <p class="report-hint muted" id="report-hint" hidden>Click a layer to select it in Figma.</p>
+    <p class="report-hint muted">Fewer surprises next time: <button type="button" class="link" id="prep-guide">PSD prep tips</button></p>
     <div id="report-groups"></div>
   </section>
 </main>
@@ -72,6 +86,7 @@
     <div class="progress"><div class="progress-bar" id="progress-bar"></div></div>
   </div>
   <button class="primary" id="import-btn" disabled>Import to Figma</button>
+  <button class="secondary" id="cancel-btn" hidden>Cancel import</button>
 </footer>
 
 <script>/*__JS__*/</script>

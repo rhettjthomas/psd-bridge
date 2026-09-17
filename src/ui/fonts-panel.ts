@@ -245,9 +245,19 @@ export class FontsPanel {
     return row;
   }
 
-  private exportMap() {
-    const { fontMap } = this.resolve();
-    const blob = new Blob([JSON.stringify(fontMap, null, 2)], { type: 'application/json' });
+  /** Saved matches plus any the user has chosen to remember in the open window. */
+  currentMap(): FontMap {
+    return this.resolve().fontMap;
+  }
+
+  exportMap() {
+    const map = this.currentMap();
+    const count = Object.keys(map).length;
+    if (!count) {
+      this.opts.notify('warning', 'There are no saved font matches to export yet.');
+      return;
+    }
+    const blob = new Blob([JSON.stringify(map, null, 2)], { type: 'application/json' });
     const a = document.createElement('a');
     a.href = URL.createObjectURL(blob);
     a.download = 'psd-bridge-font-map.json';
@@ -255,6 +265,32 @@ export class FontsPanel {
     a.click();
     a.remove();
     setTimeout(() => URL.revokeObjectURL(a.href), 1000);
+    this.opts.notify('warning', `Exported ${count} font ${count === 1 ? 'match' : 'matches'}. If no file downloaded, use "Copy font map" in settings.`);
+  }
+
+  async copyMap() {
+    const map = this.currentMap();
+    const count = Object.keys(map).length;
+    if (!count) {
+      this.opts.notify('warning', 'There are no saved font matches to copy yet.');
+      return;
+    }
+    const ok = await copyText(JSON.stringify(map, null, 2));
+    this.opts.notify(ok ? 'warning' : 'error', ok
+      ? `Copied ${count} font ${count === 1 ? 'match' : 'matches'}. Paste into a .json file to share.`
+      : "Couldn't copy to the clipboard.");
+  }
+
+  pickMapFile() {
+    this.opts.root.querySelector<HTMLInputElement>('#map-input')!.click();
+  }
+
+  clearSaved() {
+    this.fontMap = {};
+    for (const c of this.choices.values()) c.remember = false;
+    this.opts.saveFontMap({});
+    this.opts.notify('warning', 'Cleared saved font matches.');
+    this.opts.rescan();
   }
 
   private async importMap(file: File) {
@@ -272,6 +308,24 @@ export class FontsPanel {
     } catch {
       this.opts.notify('error', `"${file.name}" isn't a valid font map (JSON).`);
     }
+  }
+}
+
+/** Clipboard API first; the execCommand fallback works in iframes that block it. */
+export async function copyText(text: string): Promise<boolean> {
+  try {
+    await navigator.clipboard.writeText(text);
+    return true;
+  } catch {
+    const area = document.createElement('textarea');
+    area.value = text;
+    area.style.position = 'fixed';
+    area.style.opacity = '0';
+    document.body.append(area);
+    area.select();
+    const ok = document.execCommand('copy');
+    area.remove();
+    return ok;
   }
 }
 

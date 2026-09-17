@@ -17,7 +17,7 @@ import { planImport, type PlannedLayer } from '../core/plan';
 import { formatTree, psdToIR } from '../core/psd-reader';
 import { DEFAULT_SETTINGS, type ImportSettings } from '../core/settings';
 import { encodeMask, encodePixels } from './encode';
-import { FontsPanel } from './fonts-panel';
+import { copyText, FontsPanel } from './fonts-panel';
 import { collectFontUsage } from '../core/fonts';
 
 const TOGGLES: { key: keyof ImportSettings; icon: string; label: string; help: string }[] = [
@@ -50,6 +50,10 @@ let settings: ImportSettings = { ...DEFAULT_SETTINGS };
 let currentFile: File | null = null;
 let preflight: { doc: IRDocument; report: ReportItem[] } | null = null;
 let importing = false;
+let cancelRequested = false;
+let importStarted = 0;
+
+class ImportCanceled extends Error {}
 let ackWaiter: { resolve: () => void; reject: (e: Error) => void } | null = null;
 
 function post(msg: UIToMain, transfer: Transferable[] = []) {
@@ -136,20 +140,29 @@ function setStatus(label: string | null, fraction = 0) {
 function setBusy(busy: boolean) {
   importing = busy;
   updateImportButton();
+  $('import-btn').hidden = busy;
+  $('cancel-btn').hidden = !busy;
+  $<HTMLButtonElement>('cancel-btn').disabled = false;
   $<HTMLInputElement>('file-input').disabled = busy;
   for (const el of $('toggles').querySelectorAll('input')) el.disabled = busy;
 }
 
-function renderReport(title: string, items: ReportItem[], imported?: number) {
+let lastReport: { title: string; items: ReportItem[]; counts: string } | null = null;
+
+function renderReport(title: string, items: ReportItem[], imported?: number, durationMs?: number) {
   const approx = items.filter((i) => i.level === 'approximated');
   const skipped = items.filter((i) => i.level === 'skipped');
-  $('report').hidden = false;
-  $('report-title').textContent = title;
-  $('report-counts').textContent = [
+  const counts = [
     imported !== undefined ? `${imported} imported` : '',
     `${approx.length} approximated`,
     `${skipped.length} skipped`,
+    durationMs !== undefined ? formatDuration(durationMs) : '',
   ].filter(Boolean).join(' · ');
+  lastReport = { title, items, counts };
+  $('report').hidden = false;
+  $('report-title').textContent = title;
+  $('report-counts').textContent = counts;
+  $('report-hint').hidden = !items.some((i) => i.nodeId);
 
   const groups = [
     { level: 'approximated', label: 'Approximated', list: approx },
@@ -160,24 +173,52 @@ function renderReport(title: string, items: ReportItem[], imported?: number) {
     ...groups.map((g) => {
       const details = document.createElement('details');
       details.className = `level-${g.level}`;
+      // Open short lists after an import so the cleanup list is visible right away.
+      details.open = imported !== undefined && g.list.length <= 8;
       const summary = document.createElement('summary');
       summary.textContent = `${g.label} (${g.list.length})`;
       const ul = document.createElement('ul');
       for (const item of g.list) {
         const li = document.createElement('li');
+        const el = document.createElement(item.nodeId ? 'button' : 'div');
+        el.className = 'item';
+        if (item.nodeId) {
+          const id = item.nodeId;
+          (el as HTMLButtonElement).type = 'button';
+          el.title = 'Select in Figma';
+          el.addEventListener('click', () => post({ type: 'select-node', nodeId: id }));
+        }
         const name = document.createElement('span');
         name.className = 'item-name';
         name.textContent = item.layerName;
         const reason = document.createElement('span');
         reason.className = 'item-reason';
         reason.textContent = item.reason;
-        li.append(name, reason);
+        el.append(name, reason);
+        li.append(el);
         ul.append(li);
       }
       details.append(summary, ul);
       return details;
     }),
   );
+}
+
+function reportText(): string {
+  if (!lastReport) return '';
+  const lines = [`PSD Bridge — ${lastReport.title}`, currentFile ? currentFile.name : '', lastReport.counts, ''];
+  for (const level of ['approximated', 'skipped'] as const) {
+    const list = lastReport.items.filter((i) => i.level === level);
+    if (!list.length) continue;
+    lines.push(`${level === 'approximated' ? 'Approximated' : 'Skipped'} (${list.length})`);
+    for (const i of list) lines.push(`- ${i.layerName}: ${i.reason}`);
+    lines.push('');
+  }
+  return lines.filter((l, i) => l !== '' || i > 2).join('\n').trim();
+}
+
+function formatDuration(ms: number): string {
+  return ms < 1000 ? `${Math.round(ms)} ms` : `${(ms / 1000).toFixed(1)} s`;
 }
 
 function renderPreflight() {
@@ -197,8 +238,8 @@ async function loadFile(file: File) {
   showNotices([]);
   $('report').hidden = true;
 
-  if (!/\.psd$/i.test(file.name)) {
-    showNotices([{ level: 'error', text: `"${file.name}" isn't a .psd file.` }]);
+  if (!/\.ps[db]$/i.test(file.name)) {
+    showNotices([{ level: 'error', text: `"${file.name}" isn't a Photoshop file (.psd or .psb).` }]);
     return;
   }
 
@@ -244,6 +285,8 @@ function parseErrorMessage(name: string, err: unknown): string {
 async function runImport() {
   if (!currentFile || !preflight || importing || !fontsPanel.ready) return;
   const file = currentFile;
+  cancelRequested = false;
+  importStarted = performance.now();
   setBusy(true);
   showNotices([]);
   $('report').hidden = true;
@@ -287,8 +330,9 @@ async function runImport() {
     };
 
     for (let i = 0; i < plan.layers.length; i++) {
+      if (cancelRequested) throw new ImportCanceled();
       const layer = plan.layers[i];
-      setStatus(`Encoding layer ${i + 1} of ${plan.layers.length}`, i / plan.layers.length);
+      setStatus(`Importing layer ${i + 1} of ${plan.layers.length}`, i / plan.layers.length);
       const src = layer.action === 'clip' ? undefined : sources[layer.id];
       const pngs = src ? await encodeLayer(src, layer, doc, patterns, encodeReport) : [];
       for (const png of pngs) {
@@ -299,15 +343,22 @@ async function runImport() {
       if (batch.length >= LAYER_BATCH_SIZE || bytes >= BATCH_BYTE_LIMIT) await flush();
     }
     await flush();
+    if (cancelRequested) throw new ImportCanceled();
 
     setStatus('Finishing…', 1);
+    $<HTMLButtonElement>('cancel-btn').disabled = true;
     post({ type: 'import-end', report: encodeReport });
   } catch (err) {
-    console.error('[PSD Bridge] Import failed', err);
     if (begun) post({ type: 'import-abort', message: String(err) });
     setStatus(null);
     setBusy(false);
-    showNotices([{ level: 'error', text: `Import stopped: ${err instanceof Error ? err.message : String(err)}` }]);
+    if (err instanceof ImportCanceled) {
+      showNotices([{ level: 'warning', text: 'Import canceled. Nothing was added to the file.' }]);
+      renderPreflight();
+      return;
+    }
+    console.error('[PSD Bridge] Import failed', err);
+    showNotices([{ level: 'error', text: `Import stopped: ${err instanceof Error ? err.message : String(err)}. Nothing was added to the file.` }]);
   }
 }
 
@@ -402,7 +453,7 @@ class PatternCache {
 function onReport(report: ImportReport) {
   setStatus(null);
   setBusy(false);
-  renderReport('Import report', report.items, report.imported);
+  renderReport('Import report', report.items, report.imported, performance.now() - importStarted);
   $('report').scrollIntoView({ behavior: 'smooth', block: 'start' });
 }
 
@@ -422,6 +473,7 @@ window.onmessage = (event: MessageEvent) => {
       fontsPanel.setFontMap(msg.fontMap);
       fontsPanel.setEnabled(settings.editableText);
       $('version').textContent = `v${msg.version}`;
+      $('menu-about').textContent = `PSD Bridge v${msg.version} · works offline`;
       renderToggles();
       break;
     case 'fonts':
@@ -432,7 +484,9 @@ window.onmessage = (event: MessageEvent) => {
       ackWaiter = null;
       break;
     case 'progress':
-      setStatus(msg.label, msg.total ? msg.done / msg.total : 0);
+      // The UI reports per-layer progress itself; the main thread's phase labels
+      // (loading fonts) only matter before the first layer is sent.
+      if (msg.done === 0 && /fonts/i.test(msg.label)) setStatus(msg.label, 0);
       break;
     case 'report':
       onReport(msg.report);
@@ -468,8 +522,73 @@ dropzone.addEventListener('drop', (e) => {
 });
 
 $('import-btn').addEventListener('click', () => void runImport());
-$('settings-btn').addEventListener('click', () => {
-  showNotices([{ level: 'warning', text: 'Settings (font map import/export, reset) arrive with Milestones 5–6.' }]);
+$('cancel-btn').addEventListener('click', () => {
+  cancelRequested = true;
+  $<HTMLButtonElement>('cancel-btn').disabled = true;
+  setStatus('Canceling…', 0);
+});
+
+$('prep-guide').addEventListener('click', () => post({ type: 'open-prep-guide' }));
+
+$('copy-report').addEventListener('click', async () => {
+  const ok = await copyText(reportText());
+  showNotices([{ level: ok ? 'warning' : 'error', text: ok ? 'Report copied.' : "Couldn't copy the report." }]);
+});
+
+const menu = $('settings-menu');
+const menuBtn = $('settings-btn');
+const setMenu = (open: boolean) => {
+  menu.hidden = !open;
+  menuBtn.setAttribute('aria-expanded', String(open));
+  if (open) menu.querySelector<HTMLButtonElement>('button')?.focus();
+};
+menuBtn.addEventListener('click', (e) => {
+  e.stopPropagation();
+  setMenu(!!menu.hidden);
+});
+document.addEventListener('click', (e) => {
+  if (!menu.hidden && !menu.contains(e.target as Node)) setMenu(false);
+});
+document.addEventListener('keydown', (e) => {
+  if (menu.hidden) return;
+  const items = [...menu.querySelectorAll<HTMLButtonElement>('button')];
+  const i = items.indexOf(document.activeElement as HTMLButtonElement);
+  if (e.key === 'Escape') {
+    setMenu(false);
+    menuBtn.focus();
+  } else if (e.key === 'ArrowDown' || e.key === 'ArrowUp') {
+    e.preventDefault();
+    const next = e.key === 'ArrowDown' ? (i + 1) % items.length : (i - 1 + items.length) % items.length;
+    items[next].focus();
+  }
+});
+menu.addEventListener('click', (e) => {
+  const action = (e.target as HTMLElement).closest<HTMLButtonElement>('button')?.dataset.action;
+  if (!action) return;
+  setMenu(false);
+  switch (action) {
+    case 'reset':
+      if (importing) return;
+      settings = { ...DEFAULT_SETTINGS };
+      post({ type: 'save-settings', settings });
+      renderToggles();
+      fontsPanel.setEnabled(settings.editableText);
+      renderPreflight();
+      showNotices([{ level: 'warning', text: 'Import options reset to defaults.' }]);
+      break;
+    case 'export-map':
+      fontsPanel.exportMap();
+      break;
+    case 'copy-map':
+      void fontsPanel.copyMap();
+      break;
+    case 'import-map':
+      fontsPanel.pickMapFile();
+      break;
+    case 'clear-map':
+      fontsPanel.clearSaved();
+      break;
+  }
 });
 
 renderToggles();

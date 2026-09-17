@@ -49,6 +49,7 @@ src/main/paints.ts       Paints and strokes applied to Figma nodes
 src/main/text.ts         Font loading and editable text nodes (with glyph-bounds alignment)
 src/ui/fonts-panel.ts    The font matching window
 src/ui/combobox.ts       Searchable, themed dropdown (font families)
+docs/PSD-PREP.md         Prep guide linked from the import report
 src/main/importer.ts     Builds frames, groups, and image fills (main thread)
 src/ui/encode.ts         Pixel data → PNG, with downscaling
 src/ui/ui.html|css|ts    Plugin window; runs ag-psd with the browser canvas
@@ -149,7 +150,7 @@ From the brief:
 - The "Editable vectors" toggle works; when it is off, shapes import as pixels.
 - **Done when:** the outline, fill, and stroke match Photoshop.
 
-### M5 — Text and font matching ✅ (built; needs a check in Figma with real fonts)
+### M5 — Text and font matching ✅
 How it's built:
 - **Matching:** on file load, the UI collects every PostScript font the text layers use and
   asks the main thread to match them. The main thread matches by family and style, drops
@@ -191,20 +192,45 @@ From the brief:
   is no frame-in-frame.
 - Artboards are kept when flattening groups.
 
-### M6 — Polish
+### M6 — Polish ✅ (built; needs a check in Figma)
+How it's built:
+- **Settings menu (gear):** reset import options; export, copy, and import the font map;
+  clear saved font matches; version.
+- **Report:** a layer name that maps to a placed node is a button that selects and zooms to it,
+  switching pages if needed. The report also has Copy (plain text), the import time, and a
+  "PSD prep tips" link that opens `docs/PSD-PREP.md` via `figma.openExternal`. Short lists
+  open automatically after an import.
+- **Cancel import:** stops between layers and removes the partial frame.
+- **Progress:** "Importing layer N of M", plus "Loading fonts…" from the main thread.
+- **File support:** `.psb` files are accepted (ag-psd reads them); the upload icon shows in
+  the empty drop zone.
+- **Themes and errors:** light and dark themes use Figma's variables, including the menus.
+  Error messages say what happened and what to do next. A failed or canceled import
+  leaves the file untouched.
+- **Docs:** README install (about 10 minutes), usage, troubleshooting, and publishing notes;
+  `docs/PSD-PREP.md`.
+- **Version:** 0.9.0 (release candidate until the acceptance test passes).
+
+From the brief:
 - Reference-style UI, progress bar, report panel with layer names, and settings menu.
 - Light and dark themes, clear error messages, and no crash on a bad file.
 - A README section on installing on a second machine (target: under 10 minutes).
 
 ## Acceptance test (v1)
-- [ ] A prepped sermon series PSD imports with no errors
-- [ ] The overlay test shows no shift in pixel layers
-- [ ] Shape layers are editable vectors, or are reported with a reason
-- [ ] Text layers are editable, or are reported with a reason
-- [ ] Texture layers keep their blend modes, and hidden source layers stay hidden
-- [ ] A missing Adobe font imports after one pass through the matching window
-- [ ] The plugin installs on a second machine in under 10 minutes
-- [ ] Cleanup takes under 5 minutes
+✅ = confirmed by Rhett in Figma during milestone checks; ⬜ = still to confirm.
+- ✅ A prepped sermon series PSD imports with no errors (M2–M5 checks)
+- ✅ The overlay test shows no shift in pixel layers (M2 check)
+- ✅ Shape layers are editable vectors, or are reported with a reason (M4 check)
+- ✅ Text layers are editable, or are reported with a reason (M5 check)
+- ✅ Texture layers keep their blend modes, and hidden source layers stay hidden (M3 check)
+- ✅ A missing font imports after one pass through the matching window (M5 check). ⬜ Still
+  to confirm with a real Adobe Fonts font.
+- ⬜ The plugin installs on a second machine in under 10 minutes (README → Install)
+- ⬜ Cleanup takes under 5 minutes, on a full sermon series PSD
+
+**Unverified in Figma so far:** export font map download (copy is the fallback), select-from-report
+across pages, the prep guide link (it resolves after `docs/PSD-PREP.md` is on `main`), and a
+real `.psb` file.
 
 ## Before publishing
 - Create the plugin record in Figma desktop (Plugins → Development → New plugin), copy

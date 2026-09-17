@@ -29,6 +29,8 @@ export class Importer {
   /** Layer ids that produced a node (used to validate clipping bases). */
   private readonly placed = new Set<number>();
   private readonly artboards = new Set<SceneNode>();
+  /** Layer name → first node placed for it, so report items can link to layers. */
+  private readonly nodeByName = new Map<string, string>();
   private imported = 0;
   done = 0;
 
@@ -101,6 +103,7 @@ export class Importer {
     this.applyCommon(node, layer);
     this.imported++;
     this.placed.add(layer.id);
+    this.link(layer.name, node);
   }
 
   private textNode(parent: Container, layer: PlannedLayer): TextNode {
@@ -233,13 +236,19 @@ export class Importer {
       group.name = layer.name;
       this.applyCommon(group, layer);
       frame.remove();
+      this.link(layer.name, group);
       if (layer.action === 'group') this.imported++;
     }
 
     this.unwrapSingleArtboard();
     figma.currentPage.selection = [this.frame];
     figma.viewport.scrollAndZoomIntoView([this.frame]);
-    return { imported: this.imported, items: [...this.report, ...uiReport] };
+    this.nodeByName.set(this.doc.name, this.frame.id);
+    const items = [...this.report, ...uiReport].map((item) => {
+      const nodeId = this.nodeByName.get(item.layerName);
+      return nodeId ? { ...item, nodeId } : item;
+    });
+    return { imported: this.imported, items };
   }
 
   /**
@@ -262,6 +271,7 @@ export class Importer {
     if (layer.blendMode !== 'PASS_THROUGH') frame.blendMode = layer.blendMode;
     this.artboards.add(frame);
     this.imported++;
+    this.link(layer.name, frame);
   }
 
   /**
@@ -281,12 +291,17 @@ export class Importer {
       child.x = x;
       child.y = y;
     }
+    for (const [name, id] of this.nodeByName) if (id === board.id) this.nodeByName.set(name, this.frame.id);
     board.remove();
   }
 
   /** Removes a partially built import after a fatal error. */
   abort() {
     if (!this.frame.removed) this.frame.remove();
+  }
+
+  private link(name: string, node: SceneNode) {
+    if (!this.nodeByName.has(name)) this.nodeByName.set(name, node.id);
   }
 
   private applyCommon(node: SceneNode & BlendMixin, layer: PlannedLayer) {

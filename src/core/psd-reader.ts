@@ -40,7 +40,7 @@ export function psdToIR(psd: Psd, fileName: string): ReadResult {
   const report: ReportItem[] = [];
   const sources: Layer[] = [];
   const globalAngle = psd.imageResources?.globalAngle ?? 120;
-  const docName = fileName.replace(/\.psd$/i, '');
+  const docName = fileName.replace(/\.ps[db]$/i, '');
 
   const colorMode =
     psd.colorMode === COLOR_MODE_RGB ? 'RGB'

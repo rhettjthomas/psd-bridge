@@ -182,6 +182,8 @@ export interface ReportItem {
   level: ReportLevel;
   layerName: string;
   reason: string;
+  /** Figma node for this layer, filled in after import so the report can select it. */
+  nodeId?: string;
 }
 
 export interface ImportReport {
