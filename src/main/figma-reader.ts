@@ -1,6 +1,10 @@
 /**
  * Figma nodes → the intermediate layer model. Main thread only.
  *
+ * PARKED: v1 ships as an importer only, so nothing calls this yet. It is kept (and tested)
+ * because the export research is done and this is the piece it starts from. See
+ * docs/V2-PLAN.md.
+ *
  * The mirror image of `src/core/psd-reader.ts`: v1 reads PSD → IR, v2 reads Figma → IR,
  * and the writers build from the same model. Everything is measured in document pixels
  * relative to the exported frame's top-left corner, which is what PSD uses.

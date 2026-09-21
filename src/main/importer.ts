@@ -240,10 +240,10 @@ export class Importer {
       if (layer.action === 'group') this.imported++;
     }
 
-    this.unwrapSingleArtboard();
-    figma.currentPage.selection = [this.frame];
-    figma.viewport.scrollAndZoomIntoView([this.frame]);
-    this.nodeByName.set(this.doc.name, this.frame.id);
+    const roots = this.placeArtboards();
+    figma.currentPage.selection = roots;
+    figma.viewport.scrollAndZoomIntoView(roots);
+    if (!this.nodeByName.has(this.doc.name)) this.nodeByName.set(this.doc.name, roots[0].id);
     const items = [...this.report, ...uiReport].map((item) => {
       const nodeId = this.nodeByName.get(item.layerName);
       return nodeId ? { ...item, nodeId } : item;
@@ -275,24 +275,60 @@ export class Importer {
   }
 
   /**
-   * A PSD with one artboard and nothing else becomes a single frame: the import frame
-   * takes the artboard's size and background instead of wrapping it.
+   * Artboards become frames people can work with directly:
+   * - one artboard, nothing else: the import frame *is* that artboard;
+   * - several artboards, nothing else: each becomes a top-level frame on the page, keeping
+   *   the spacing it had in Photoshop, and the document frame goes away;
+   * - artboards mixed with loose layers: the document frame stays, so nothing moves.
+   *
+   * Returns the frames to select afterwards.
    */
-  private unwrapSingleArtboard() {
-    const kids = this.frame.children;
-    if (kids.length !== 1 || kids[0].type !== 'FRAME' || !this.artboards.has(kids[0])) return;
-    const board = kids[0];
-    if (!board.visible || board.opacity !== 1 || board.blendMode !== 'PASS_THROUGH') return;
-    this.frame.resize(board.width, board.height);
-    this.frame.fills = board.fills;
-    for (const child of [...board.children]) {
-      const { x, y } = child;
-      this.frame.appendChild(child);
-      child.x = x;
-      child.y = y;
+  private placeArtboards(): SceneNode[] {
+    const kids = [...this.frame.children];
+    const boards = kids.filter((k): k is FrameNode => k.type === 'FRAME' && this.artboards.has(k));
+    if (!boards.length) return [this.frame];
+
+    if (boards.length !== kids.length) {
+      this.approximate(this.doc.name, 'Layers outside the artboards kept the document frame around them.');
+      return [this.frame];
     }
-    for (const [name, id] of this.nodeByName) if (id === board.id) this.nodeByName.set(name, this.frame.id);
-    board.remove();
+
+    if (boards.length === 1) {
+      const board = boards[0];
+      // Only fold it in when the artboard itself carries no layer properties of its own.
+      if (board.visible && board.opacity === 1 && board.blendMode === 'PASS_THROUGH') {
+        this.frame.resize(board.width, board.height);
+        this.frame.fills = board.fills;
+        for (const child of [...board.children]) {
+          const { x, y } = child;
+          this.frame.appendChild(child);
+          child.x = x;
+          child.y = y;
+        }
+        this.remapNode(board.id, this.frame.id);
+        board.remove();
+      }
+      return [this.frame];
+    }
+
+    const page = this.frame.parent ?? figma.currentPage;
+    const baseX = this.frame.x;
+    const baseY = this.frame.y;
+    for (const board of boards) {
+      const { x, y } = board;
+      page.appendChild(board);
+      board.x = baseX + x;
+      board.y = baseY + y;
+    }
+    // The document frame only existed to hold them.
+    this.remapNode(this.frame.id, boards[0].id);
+    this.frame.remove();
+    return boards;
+  }
+
+  /** Keeps report links pointing at a node that replaced another. */
+  private remapNode(from: string, to: string) {
+    for (const [name, id] of this.nodeByName) if (id === from) this.nodeByName.set(name, to);
   }
 
   /** Removes a partially built import after a fatal error. */

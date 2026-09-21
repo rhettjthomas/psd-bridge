@@ -2,13 +2,12 @@
  * Main thread. Owns the Figma document: settings storage, font matching and loading,
  * and node building. Never touches PSD bytes or canvas; the UI iframe does that.
  */
-import { PREP_GUIDE_URL, type FrameInfo, type MainToUI, type UIToMain } from './core/messages';
+import { PREP_GUIDE_URL, type MainToUI, type UIToMain } from './core/messages';
 import { formatTree } from './core/psd-reader';
 import { FONT_MAP_KEY, normalizeSettings, SETTINGS_KEY } from './core/settings';
 import { buildFontIndex, groupFamilies, matchFont, type FontMap } from './core/fonts';
 import { isLicensed } from './licensing';
 import { Importer } from './main/importer';
-import { readFrame } from './main/figma-reader';
 import { loadFonts } from './main/text';
 
 declare const __VERSION__: string;
@@ -49,39 +48,6 @@ async function resolveFonts(postScriptNames: string[]) {
   });
 }
 
-/** Containers that can be exported: the selection first, then the page's top-level frames. */
-type Exportable = FrameNode | ComponentNode | InstanceNode | GroupNode;
-
-const EXPORTABLE = ['FRAME', 'COMPONENT', 'INSTANCE', 'GROUP'];
-
-function isExportable(node: BaseNode): node is Exportable {
-  return EXPORTABLE.indexOf(node.type) >= 0;
-}
-
-function frameInfo(node: Exportable): FrameInfo {
-  const box = node.absoluteBoundingBox;
-  return {
-    id: node.id,
-    name: node.name,
-    width: Math.round(box?.width ?? node.width),
-    height: Math.round(box?.height ?? node.height),
-    layerCount: node.findAll(() => true).length,
-  };
-}
-
-function sendFrames() {
-  const selected = figma.currentPage.selection.filter(isExportable);
-  const onPage = figma.currentPage.children.filter(isExportable);
-  const seen = new Set<string>();
-  const frames: FrameInfo[] = [];
-  for (const node of [...selected, ...onPage]) {
-    if (seen.has(node.id)) continue;
-    seen.add(node.id);
-    frames.push(frameInfo(node));
-  }
-  post({ type: 'frames', frames, selectedId: selected[0]?.id ?? null });
-}
-
 async function selectNode(id: string) {
   const node = await figma.getNodeByIdAsync(id);
   if (!node || node.removed || node.type === 'DOCUMENT' || node.type === 'PAGE') {
@@ -99,7 +65,6 @@ async function handle(msg: UIToMain) {
   switch (msg.type) {
     case 'ui-ready':
       await sendInit();
-      sendFrames();
       break;
     case 'save-settings':
       await figma.clientStorage.setAsync(SETTINGS_KEY, normalizeSettings(msg.settings));
@@ -149,17 +114,6 @@ async function handle(msg: UIToMain) {
     case 'open-prep-guide':
       figma.openExternal(PREP_GUIDE_URL);
       break;
-    case 'refresh-frames':
-      sendFrames();
-      break;
-    case 'read-frame': {
-      const node = await figma.getNodeByIdAsync(msg.nodeId);
-      if (!node || !isExportable(node)) throw new Error('That frame is no longer on the canvas.');
-      const { doc, report } = readFrame(node);
-      console.log(`[PSD Bridge] Frame read for export\n${formatTree(doc)}`, { doc, report });
-      post({ type: 'frame-read', doc, report });
-      break;
-    }
   }
 }
 
@@ -181,14 +135,3 @@ figma.ui.onmessage = (msg: UIToMain) => {
     }
   });
 };
-
-// Keep the Export tab in step with what's selected on the canvas.
-figma.on('selectionchange', () => {
-  queue = queue.then(() => {
-    try {
-      sendFrames();
-    } catch (err) {
-      console.error('[PSD Bridge]', err);
-    }
-  });
-});

@@ -1,6 +1,6 @@
 {
   "name": "psd-bridge",
-  "version": "0.9.0",
+  "version": "1.0.1",
   "private": true,
   "description": "Figma plugin that imports a prepped PSD as a layered, editable frame.",
   "scripts": {

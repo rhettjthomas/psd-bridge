@@ -37,6 +37,7 @@ button { font: inherit; color: inherit; }
 
 .header {
   display: flex;
+  border-bottom: 1px solid var(--border);
   align-items: center;
   justify-content: space-between;
   padding: var(--space) calc(var(--space) * 2);
@@ -58,23 +59,6 @@ button { font: inherit; color: inherit; }
 }
 .icon-btn:hover { background: var(--bg-hover); color: var(--text); }
 
-.tabs {
-  display: flex;
-  gap: calc(var(--space) * 2);
-  padding: 0 calc(var(--space) * 2);
-  border-bottom: 1px solid var(--border);
-}
-.tab {
-  padding: var(--space) 0;
-  border: 0;
-  border-bottom: 2px solid transparent;
-  background: none;
-  color: var(--text-secondary);
-  font-weight: 500;
-  cursor: pointer;
-}
-.tab.active { color: var(--text); border-bottom-color: var(--text); }
-.tab:disabled { cursor: not-allowed; opacity: 0.5; }
 
 .content {
   flex: 1;
@@ -408,22 +392,3 @@ button { font: inherit; color: inherit; }
 .sheet-actions { display: flex; gap: var(--space); }
 .sheet-actions .secondary { flex: 1; }
 
-.frames { display: flex; flex-direction: column; gap: var(--space); }
-.frames-head { display: flex; align-items: baseline; justify-content: space-between; }
-.frames .select { width: 100%; }
-.frames select {
-  width: 100%;
-  height: 32px;
-  padding: 0 24px 0 8px;
-  appearance: none;
-  border: 1px solid var(--border);
-  border-radius: 4px;
-  background: var(--bg);
-  color: var(--text);
-  font: inherit;
-  font-size: 12px;
-  cursor: pointer;
-}
-.frames .select::after { top: 13px; }
-.frames p { margin: 0; font-size: 11px; }
-.export-note { margin: 0; font-size: 11px; line-height: 15px; }

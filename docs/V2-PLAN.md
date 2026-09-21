@@ -5,6 +5,12 @@ AI, "a true bridge between Photoshop, Illustrator, and Figma, in the spirit of O
 
 Written 2026-09-17, after v1 shipped. Sources are listed at the end.
 
+> **Parked 2026-09-21.** The plugin ships as an importer only. Re-importing an updated PSD is
+> simpler than round-tripping a file between two apps, and export would double the surface to
+> keep correct for a case that hasn't come up. The research below stands, the spikes are
+> answered, and `src/main/figma-reader.ts` (Figma → layer model, with tests) is in the repo, so
+> picking this up later is a build, not an investigation.
+
 ## What the research found
 
 ### 1. PSD export is a solved problem, with one catch

@@ -3,8 +3,10 @@ PSD Bridge is a Figma plugin that imports a prepped PSD ("Photoshop Document") i
 
 - **Pixel layers:** placed at their exact positions, with opacity, blend modes, and visibility
   (hidden layers stay hidden).
-- **Groups, masks, and artboards:** groups, layer masks, vector masks, and clipping masks
-  become their Figma equivalents; artboards become frames with their background color.
+- **Groups and masks:** groups, layer masks, vector masks, and clipping masks become their
+  Figma equivalents.
+- **Artboards:** each Photoshop artboard becomes its own Figma frame with its background color.
+  A multi-artboard PSD (16×9, 9×16, 1×1) arrives as separate frames, laid out as in Photoshop.
 - **Shapes:** become editable Figma vectors, or native rectangles and ellipses, with fills,
   gradients, and strokes.
 - **Text:** becomes editable Figma text. Missing fonts go through a font matching window
@@ -58,6 +60,9 @@ and click **Save**. Saved matches belong to this plugin ID on each machine.
 5. Click **Import to Figma**. You can cancel partway through, and a canceled import adds
    nothing to the file.
 6. Review the **Import report**. Click a layer to select it; *Copy* copies the report.
+
+PSD Bridge imports; it doesn't export. To update a design, change the PSD and import it again.
+[docs/V2-PLAN.md](docs/V2-PLAN.md) has the research on exporting, if that changes.
 
 ## Troubleshooting
 

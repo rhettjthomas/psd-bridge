@@ -24,12 +24,7 @@
   </div>
 </header>
 
-<nav class="tabs" role="tablist">
-  <button class="tab active" role="tab" aria-selected="true" id="tab-import" aria-controls="panel-import">Import</button>
-  <button class="tab" role="tab" aria-selected="false" id="tab-export" aria-controls="panel-export">Export</button>
-</nav>
-
-<main class="content" id="panel-import" role="tabpanel" aria-labelledby="tab-import">
+<main class="content">
   <label class="dropzone" id="dropzone">
     <input type="file" id="file-input" accept=".psd,.psb,image/vnd.adobe.photoshop" hidden />
     <div class="dropzone-empty" id="dropzone-empty">
@@ -75,28 +70,6 @@
   </section>
 </main>
 
-<main class="content" id="panel-export" role="tabpanel" aria-labelledby="tab-export" hidden>
-  <section class="frames" id="frames">
-    <div class="frames-head">
-      <strong>Frame to export</strong>
-      <button type="button" class="link" id="refresh-frames">Refresh</button>
-    </div>
-    <div class="select"><select id="frame-select" aria-label="Frame to export"></select></div>
-    <p class="muted" id="frame-meta">Select a frame on the canvas.</p>
-  </section>
-
-  <section class="report" id="export-report" hidden>
-    <div class="report-head"><strong>Preview</strong></div>
-    <div class="report-counts" id="export-counts"></div>
-    <div id="export-groups"></div>
-  </section>
-
-  <p class="muted export-note">
-    Exporting writes the file in the next milestone. For now, reading a frame logs its layer
-    tree to the console (Plugins → Development → Show/Hide console).
-  </p>
-</main>
-
 <footer class="footer">
   <section class="notices" id="notices" role="status" aria-live="polite" hidden></section>
   <div class="status" id="status" hidden>
@@ -104,7 +77,6 @@
     <div class="progress"><div class="progress-bar" id="progress-bar"></div></div>
   </div>
   <button class="primary" id="import-btn" disabled>Import to Figma</button>
-  <button class="primary" id="export-btn" hidden disabled>Read frame</button>
   <button class="secondary" id="cancel-btn" hidden>Cancel import</button>
 </footer>
 
