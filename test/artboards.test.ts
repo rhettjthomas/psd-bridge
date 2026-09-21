@@ -29,7 +29,8 @@ function importPsd(psd: Psd, settings: ImportSettings = DEFAULT_SETTINGS) {
   const imp = new Importer(info, settings, plan.layers.length, []);
   imp.addBatch(plan.layers);
   const result = imp.finish([]);
-  return { doc, frame: imp.frame as unknown as MockNode, result };
+  const page = (globalThis as any).figma.currentPage as MockNode;
+  return { doc, frame: imp.frame as unknown as MockNode, page, result };
 }
 
 describe('artboardBackground', () => {
@@ -64,8 +65,8 @@ describe('artboards', () => {
     expect(frame.clipsContent).toBe(true);
   });
 
-  it('keeps several artboards as clipped frames at their positions', () => {
-    const { frame, result } = importPsd({
+  it('puts several artboards on the page as separate frames, keeping their spacing', () => {
+    const { page, result } = importPsd({
       width: 2000,
       height: 800,
       children: [
@@ -73,18 +74,36 @@ describe('artboards', () => {
         board('Wide', 900, 100, 1100, 600, 4, [px('B', 950, 150, 50, 50)], { r: 20, g: 40, b: 60 }),
       ],
     });
-    expect(tree(frame)).toEqual([
-      'FRAME boards @0,0 2000x800',
-      '  FRAME Square @0,0 800x800',
-      '    RECTANGLE A @10,10 50x50',
-      '  FRAME Wide @900,100 1100x600',
-      '    RECTANGLE B @50,50 50x50',
+    // The document frame is gone; each artboard stands on its own.
+    expect(page.children.filter((c) => c.type === 'FRAME').map((c) => tree(c)).flat()).toEqual([
+      'FRAME Square @0,0 800x800',
+      '  RECTANGLE A @10,10 50x50',
+      'FRAME Wide @900,100 1100x600',
+      '  RECTANGLE B @50,50 50x50',
     ]);
-    const [square, wide] = frame.children;
+    const [square, wide] = page.children.filter((c) => c.type === 'FRAME');
     expect(square.fills).toEqual([]);
     expect(wide.fills).toEqual([{ type: 'SOLID', color: { r: 20 / 255, g: 40 / 255, b: 60 / 255 }, opacity: 1 }]);
     expect(wide.clipsContent).toBe(true);
     expect(result.imported).toBe(4);
+  });
+
+  it('keeps the document frame when artboards sit alongside loose layers', () => {
+    const { frame, result } = importPsd({
+      width: 2000,
+      height: 800,
+      children: [
+        px('Loose note', 0, 0, 100, 100),
+        board('Square', 200, 0, 800, 800, 1, [px('A', 210, 10, 50, 50)]),
+      ],
+    });
+    expect(tree(frame)).toEqual([
+      'FRAME boards @0,0 2000x800',
+      '  RECTANGLE Loose note @0,0 100x100',
+      '  FRAME Square @200,0 800x800',
+      '    RECTANGLE A @10,10 50x50',
+    ]);
+    expect(result.items).toContainEqual(expect.objectContaining({ layerName: 'boards', level: 'approximated' }));
   });
 
   it('keeps artboards when flattening groups', () => {

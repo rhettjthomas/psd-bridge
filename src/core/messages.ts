@@ -49,3 +49,4 @@ export type MainToUI =
 export const LAYER_BATCH_SIZE = 20;
 /** Max PNG bytes per batch, so a few huge layers don't pile up in memory. */
 export const BATCH_BYTE_LIMIT = 48 * 1024 * 1024;
+

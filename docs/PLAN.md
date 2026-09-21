@@ -185,12 +185,15 @@ From the brief:
 - Warped text and text on a path import as pixels and are reported.
 - **Done when:** text lands within 2 px of its position, and saved matches reapply.
 
-### Artboards (added after M5 testing)
+### Artboards (added after M5 testing; revised 2026-09-21)
 - An artboard group becomes a clipped Figma frame at the artboard's position, filled with its
   background (white, black, transparent, or a custom color). Its children are placed relative
   to the artboard.
-- A PSD that contains one artboard and nothing else is merged into the import frame, so there
-  is no frame-in-frame.
+- A PSD with one artboard and nothing else is merged into the import frame, so there is no
+  frame-in-frame.
+- A PSD with several artboards and nothing else puts each artboard on the page as its own
+  top-level frame, keeping the spacing it had in Photoshop. The document frame goes away.
+- Artboards mixed with loose layers keep the document frame, and the report says so.
 - Artboards are kept when flattening groups.
 
 ### M6 — Polish ✅ (built; needs a check in Figma)
@@ -242,4 +245,5 @@ paste-and-Save are the reliable path), select-from-report across pages, and a re
 - Check Figma's current seller requirements, then switch `src/licensing.ts` from the stub
   to `figma.payments`.
 
-v2 (the export bridge) does not start until v1 passes the acceptance test.
+v2 (the export bridge) is parked: the plugin ships as an importer. See
+[V2-PLAN.md](V2-PLAN.md) for the research, the answered spikes, and what it would take.
