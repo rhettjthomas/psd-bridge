@@ -42,6 +42,10 @@ To run it from source instead (contributors, or testing an unreleased change), s
 | Drop and inner shadows | Figma effects |
 | Hidden layers | Imported, still hidden |
 
+**Color modes:** RGB, grayscale, and CMYK documents all import. CMYK is converted to RGB
+without the document's color profile, so saturated colors shift; the report says so. For exact
+color, convert the file to RGB in Photoshop first.
+
 **Not imported, and listed in the report with a reason:** adjustment layers; bevels, glows,
 satin, and overlays; blend modes Figma doesn't have (these become Normal); warped, on-path, and
 vertical text (these become pixels); mask feather and density; noise gradients. Smart objects
