@@ -42,6 +42,10 @@ To run it from source instead (contributors, or testing an unreleased change), s
 | Drop and inner shadows | Figma effects |
 | Hidden layers | Imported, still hidden |
 
+**Color modes:** RGB, grayscale, and CMYK documents all import. CMYK is converted to RGB
+without the document's color profile, so saturated colors shift; the report says so. For exact
+color, convert the file to RGB in Photoshop first.
+
 **Not imported, and listed in the report with a reason:** adjustment layers; bevels, glows,
 satin, and overlays; blend modes Figma doesn't have (these become Normal); warped, on-path, and
 vertical text (these become pixels); mask feather and density; noise gradients. Smart objects
@@ -82,7 +86,9 @@ the same window on the other machine and click **Save**. Matches are stored per 
 | "too large to load" | Close other plugins, delete unused layers, or split the file. |
 | A font keeps showing as missing | Install or activate a desktop copy, then click **Rescan fonts**. For Adobe Fonts, pick a replacement and choose *Remember*. |
 | Font map Copy or Download does nothing | Figma can block the clipboard and downloads. The text is already selected, so press ⌘C (Ctrl+C). |
-| Colors look off | Convert the PSD to 8-bit RGB before importing. |
+| Colors look off on a CMYK file | CMYK is converted without its color profile. Convert the PSD to RGB in Photoshop for exact color. |
+| "uses a color mode this plugin can't read" | Convert the file to RGB, CMYK, or grayscale in Photoshop and save again. |
+| "uses a color depth this plugin can't read" | In Photoshop, choose Image → Mode → 8 Bits/Channel and save again. |
 | A layer came in as pixels instead of editable | Check the report; it names the reason. |
 | Plugin didn't pick up code changes (from source) | Run `npm run build`, then close and reopen the plugin. |
 

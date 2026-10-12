@@ -15,8 +15,10 @@ without notice.
    skipped. Convert the layer to a smart object (or rasterize its style) to keep the look.
 3. **Keep the originals.** Before rasterizing or merging, duplicate the source layers and hide
    the copies. Hidden layers import hidden, so the editable originals come along for later changes.
-4. **Use 8-bit RGB.** Choose *Image → Mode → RGB Color* and *8 Bits/Channel*. CMYK and 16-bit
-   files still import, but colors may shift, and the report flags them.
+4. **Use 8-bit RGB.** Choose *Image → Mode → RGB Color* and *8 Bits/Channel*. CMYK and grayscale
+   files do import, but CMYK is converted without the document's color profile, so saturated
+   colors shift; the report flags it. Converting in Photoshop is the only exact route, because
+   Photoshop uses the real profile. 16-bit files need converting to 8-bit before they import.
 5. **Use a supported blend mode.** Figma supports Normal, Darken, Multiply, Color Burn,
    Linear Burn, Lighten, Screen, Color Dodge, Linear Dodge (Add), Overlay, Soft Light,
    Hard Light, Difference, Exclusion, Hue, Saturation, Color, and Luminosity. Dissolve,
