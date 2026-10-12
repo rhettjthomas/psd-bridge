@@ -4,6 +4,10 @@ import * as esbuild from 'esbuild';
 import { readFile } from 'node:fs/promises';
 import { basename } from 'node:path';
 import { readPsd } from 'ag-psd';
+// Same opt-in as src/core/color-modes.ts, against this script's own ag-psd instance.
+import { supportedColorModes } from 'ag-psd/dist/psdReader.js';
+
+if (!supportedColorModes.includes(4)) supportedColorModes.push(4);
 
 const file = process.argv[2];
 if (!file) {

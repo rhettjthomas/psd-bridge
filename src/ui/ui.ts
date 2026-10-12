@@ -17,6 +17,7 @@ import { planImport, type PlannedLayer } from '../core/plan';
 import { formatTree, psdToIR } from '../core/psd-reader';
 import { DEFAULT_SETTINGS, type ImportSettings } from '../core/settings';
 import { encodeMask, encodePixels } from './encode';
+import { enableCmykReading } from '../core/color-modes';
 import { copyText, FontsPanel } from './fonts-panel';
 import { FontMapSheet } from './fontmap-sheet';
 import { collectFontUsage } from '../core/fonts';
@@ -44,6 +45,9 @@ const LAZY_PIXELS: ReadOptions = {
   skipLinkedFilesData: true,
   useRawData: true,
 };
+
+// CMYK documents are refused by default; opt in before any readPsd call.
+enableCmykReading();
 
 const $ = <T extends HTMLElement>(id: string) => document.getElementById(id) as T;
 
@@ -285,6 +289,8 @@ function parseErrorMessage(name: string, err: unknown): string {
   const detail = err instanceof Error ? err.message : String(err);
   if (/signature/i.test(detail)) return `"${name}" isn't a valid Photoshop document. Re-save it from Photoshop and try again.`;
   if (/memory|allocation|array buffer/i.test(detail)) return `"${name}" is too large to load. Close other plugins or flatten unused layers, then try again.`;
+  if (/bitsperchannel/i.test(detail)) return `"${name}" uses a color depth this plugin can't read. In Photoshop, choose Image → Mode → 8 Bits/Channel and save again.`;
+  if (/color mode not supported/i.test(detail)) return `"${name}" uses a color mode this plugin can't read (${detail.split(':').pop()?.trim()}). Convert it to RGB in Photoshop and save again.`;
   return `Couldn't read this PSD: ${detail}`;
 }
 

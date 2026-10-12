@@ -72,7 +72,9 @@ PSD Bridge imports; it doesn't export. To update a design, change the PSD and im
 | "too large to load" | Close other plugins, delete unused layers, or split the file. |
 | A font keeps showing as missing | Install or activate a desktop copy of the font, then click **Rescan fonts**. For Adobe Fonts, pick a replacement and choose *Remember*. |
 | Font map Copy or Download does nothing | Figma can block the clipboard and downloads. In *Settings → Font map*, the text is already selected, so press ⌘C. |
-| Colors look off | Convert the PSD to 8-bit RGB before importing. |
+| Colors look off on a CMYK file | CMYK is converted without its color profile. Convert the PSD to RGB in Photoshop for exact color. |
+| "uses a color mode this plugin can't read" | Convert the file to RGB (or CMYK or grayscale) in Photoshop and save again. |
+| "uses a color depth this plugin can't read" | In Photoshop, choose Image → Mode → 8 Bits/Channel and save again. |
 | Plugin didn't pick up code changes | Run `npm run build`, then close and reopen the plugin. |
 
 To see debug output, open *Plugins → Development → Show/Hide console*; the parsed layer tree is

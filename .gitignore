@@ -6,3 +6,4 @@ dist/
 *.psd
 *.psb
 !test/fixtures/sample.psd
+!test/fixtures/cmyk.psd

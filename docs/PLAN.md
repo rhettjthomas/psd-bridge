@@ -196,6 +196,17 @@ From the brief:
 - Artboards mixed with loose layers keep the document frame, and the report says so.
 - Artboards are kept when flattening groups.
 
+### CMYK import (added 2026-10-12)
+- ag-psd refuses CMYK documents by default (`supportedColorModes` omits mode 4), so these files
+  failed to open at all. The decoding exists behind that gate, so `src/core/color-modes.ts`
+  opts in before any read.
+- Colors that aren't RGB (CMYK, grayscale, HSB, Lab) used to fall back to **black**, which made
+  text and shape fills in a CMYK file solid black. `src/core/color.ts` now converts each of them.
+- CMYK → RGB is a naive multiply with no ICC profile, matching what ag-psd does to CMYK pixels
+  so fills and images shift together. The report says so on every CMYK import.
+- Fixture: `test/fixtures/cmyk.psd`, ag-psd's own CMYK test file (MIT), because ag-psd can only
+  write RGB documents.
+
 ### M6 — Polish ✅ (built; needs a check in Figma)
 How it's built:
 - **Settings menu (gear):** reset import options; a Font map window; clear saved font

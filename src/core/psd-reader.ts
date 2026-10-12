@@ -49,8 +49,14 @@ export function psdToIR(psd: Psd, fileName: string): ReadResult {
     : psd.colorMode === undefined ? 'RGB'
     : 'Other';
   const bitsPerChannel = psd.bitsPerChannel ?? 8;
-  if (colorMode !== 'RGB') {
-    report.push({ level: 'approximated', layerName: docName, reason: `${colorMode} document; colors may shift. Convert to RGB in Photoshop.` });
+  if (colorMode === 'CMYK') {
+    report.push({
+      level: 'approximated',
+      layerName: docName,
+      reason: 'CMYK document converted to RGB without its color profile; saturated colors shift most. Convert to RGB in Photoshop first for exact color.',
+    });
+  } else if (colorMode !== 'RGB') {
+    report.push({ level: 'approximated', layerName: docName, reason: `${colorMode} document converted to RGB; colors may shift.` });
   }
   if (bitsPerChannel !== 8) {
     report.push({ level: 'approximated', layerName: docName, reason: `${bitsPerChannel}-bit document; convert to 8-bit in Photoshop for accurate color.` });
